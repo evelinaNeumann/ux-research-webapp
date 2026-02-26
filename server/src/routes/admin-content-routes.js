@@ -8,6 +8,7 @@ import { PageTreeNode } from '../models/PageTreeNode.js';
 import { ResearchTask } from '../models/ResearchTask.js';
 import { Study } from '../models/Study.js';
 import { User } from '../models/User.js';
+import { StudyAssignment } from '../models/StudyAssignment.js';
 import { badRequest, notFound } from '../utils/errors.js';
 
 const router = Router();
@@ -51,6 +52,39 @@ router.delete('/users/:userId', async (req, res, next) => {
   }
 
   await User.findByIdAndDelete(req.params.userId);
+  res.status(204).send();
+});
+
+router.get('/studies/:studyId/assignments', async (req, res) => {
+  const items = await StudyAssignment.find({ study_id: req.params.studyId, is_active: true })
+    .populate('user_id', 'username role')
+    .sort({ assigned_at: -1 });
+  res.json(items);
+});
+
+router.post('/studies/:studyId/assignments', async (req, res, next) => {
+  const { user_id } = req.body;
+  if (!user_id) return next(badRequest('user_id required'));
+
+  const user = await User.findById(user_id);
+  if (!user) return next(notFound('user not found'));
+  const study = await Study.findById(req.params.studyId);
+  if (!study) return next(notFound('study not found'));
+
+  const item = await StudyAssignment.findOneAndUpdate(
+    { study_id: req.params.studyId, user_id },
+    { study_id: req.params.studyId, user_id, assigned_by: req.auth.sub, assigned_at: new Date(), is_active: true },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  res.status(201).json(item);
+});
+
+router.delete('/studies/:studyId/assignments/:userId', async (req, res) => {
+  await StudyAssignment.findOneAndUpdate(
+    { study_id: req.params.studyId, user_id: req.params.userId },
+    { is_active: false }
+  );
   res.status(204).send();
 });
 

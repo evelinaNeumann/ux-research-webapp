@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { Session } from '../models/Session.js';
 import { Study } from '../models/Study.js';
+import { StudyAssignment } from '../models/StudyAssignment.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, forbidden, badRequest } from '../utils/errors.js';
 
@@ -15,6 +16,14 @@ router.post('/', async (req, res, next) => {
 
     const study = await Study.findById(study_id);
     if (!study) throw notFound('study not found');
+    if (req.auth.role !== 'admin') {
+      const assignment = await StudyAssignment.findOne({
+        study_id,
+        user_id: req.auth.sub,
+        is_active: true,
+      });
+      if (!assignment) throw forbidden('study not assigned to user');
+    }
 
     const existing = await Session.findOne({ user_id: req.auth.sub, study_id, status: 'in_progress' }).sort({ createdAt: -1 });
     if (existing) return res.status(200).json(existing);

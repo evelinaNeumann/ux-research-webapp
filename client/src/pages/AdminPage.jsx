@@ -9,6 +9,9 @@ export function AdminPage() {
   const [studies, setStudies] = useState([]);
   const [users, setUsers] = useState([]);
   const [selectedStudy, setSelectedStudy] = useState('');
+  const [selectedUserForAssign, setSelectedUserForAssign] = useState('');
+  const [assignments, setAssignments] = useState([]);
+  const [studyForm, setStudyForm] = useState({ name: '', type: 'mixed' });
   const [questionText, setQuestionText] = useState('');
   const [cardLabel, setCardLabel] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
@@ -19,18 +22,25 @@ export function AdminPage() {
       const [studyRes, usersRes] = await Promise.all([studyApi.list(), adminApi.listUsers()]);
       setStudies(studyRes.items || []);
       setUsers(usersRes || []);
-      if (studyRes.items?.[0]?._id) setSelectedStudy(studyRes.items[0]._id);
+      if (studyRes.items?.[0]?._id) {
+        setSelectedStudy(studyRes.items[0]._id);
+      }
+      if (usersRes?.[0]?._id) {
+        setSelectedUserForAssign(usersRes[0]._id);
+      }
     })();
   }, []);
 
   const loadContent = async (studyId) => {
     if (!studyId) return;
-    const [questions, cards, tasks] = await Promise.all([
+    const [questions, cards, tasks, assigned] = await Promise.all([
       adminApi.listQuestions(studyId),
       adminApi.listCards(studyId),
       adminApi.listTasks(studyId),
+      adminApi.listAssignments(studyId),
     ]);
     setItems({ questions, cards, tasks });
+    setAssignments(assigned || []);
   };
 
   useEffect(() => {
@@ -56,6 +66,80 @@ export function AdminPage() {
           </label>
           <span>Aktiv: {selectedLabel}</span>
         </div>
+      </CardPanel>
+
+      <CardPanel title="Studienverwaltung">
+        <div className="admin-grid">
+          <FormField
+            label="Studienname"
+            value={studyForm.name}
+            onChange={(e) => setStudyForm({ ...studyForm, name: e.target.value })}
+          />
+          <label className="form-field">
+            <span>Studientyp</span>
+            <select
+              value={studyForm.type}
+              onChange={(e) => setStudyForm({ ...studyForm, type: e.target.value })}
+            >
+              <option value="mixed">mixed</option>
+              <option value="questionnaire">questionnaire</option>
+              <option value="card_sort">card_sort</option>
+              <option value="image_rating">image_rating</option>
+            </select>
+          </label>
+          <button
+            className="primary-btn"
+            onClick={async () => {
+              const created = await studyApi.create(studyForm);
+              const refreshed = await studyApi.list();
+              setStudies(refreshed.items || []);
+              setSelectedStudy(created._id);
+              setStudyForm({ name: '', type: 'mixed' });
+            }}
+          >
+            Studie anlegen
+          </button>
+        </div>
+      </CardPanel>
+
+      <CardPanel title="Studien-Zuweisung an Nutzer">
+        <div className="assign-toolbar">
+          <label className="form-field">
+            <span>Nutzer</span>
+            <select value={selectedUserForAssign} onChange={(e) => setSelectedUserForAssign(e.target.value)}>
+              {users.filter((u) => u.role === 'user').map((u) => (
+                <option key={u._id} value={u._id}>{u.username}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="primary-btn"
+            onClick={async () => {
+              if (!selectedStudy || !selectedUserForAssign) return;
+              await adminApi.assignUserToStudy(selectedStudy, selectedUserForAssign);
+              await loadContent(selectedStudy);
+            }}
+          >
+            Zur Studie zuweisen
+          </button>
+        </div>
+        {assignments.map((a) => (
+          <div key={a._id} className="row-item">
+            <div>
+              <strong>{a.user_id?.username || 'unbekannt'}</strong>
+              <small>Zugewiesen</small>
+            </div>
+            <button
+              className="danger-btn"
+              onClick={async () => {
+                await adminApi.removeAssignment(selectedStudy, a.user_id?._id);
+                await loadContent(selectedStudy);
+              }}
+            >
+              Zuweisung entfernen
+            </button>
+          </div>
+        ))}
       </CardPanel>
 
       <CardPanel title="Benutzer & Rollen">

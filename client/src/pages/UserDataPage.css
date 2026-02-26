@@ -1,0 +1,41 @@
+.user-data-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.hint {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.92rem;
+}
+
+.password-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.password-field span {
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.password-input-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem;
+}
+
+.password-input-wrap input {
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.95rem;
+}
+
+.toggle-btn {
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.55rem 0.7rem;
+  color: #334155;
+}

@@ -16,6 +16,7 @@ export function AppLayout({ user }) {
         <h1>UX Research</h1>
         <nav>
           <Link to="/">Dashboard</Link>
+          <Link to="/user-data">Meine User Data</Link>
           {user?.role === 'admin' && <Link to="/admin">Admin</Link>}
         </nav>
         <button onClick={logout} className="ghost-btn">Logout</button>

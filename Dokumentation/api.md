@@ -38,7 +38,7 @@ POST /auth/change-password
 
 ## Studies
 
-GET /studies
+GET /studies (Admin: alle, User: nur zugewiesene aktive Studien)
 GET /studies/:id
 POST /studies (Admin)
 PUT /studies/:id (Admin)
@@ -87,6 +87,11 @@ POST /admin/studies/:studyId/content/rollback
 GET /admin/users
 PUT /admin/users/:userId/role
 DELETE /admin/users/:userId
+
+### Study Assignments
+GET /admin/studies/:studyId/assignments
+POST /admin/studies/:studyId/assignments
+DELETE /admin/studies/:studyId/assignments/:userId
 
 ---
 

@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AdminPage } from './pages/AdminPage';
+import { UserDataPage } from './pages/UserDataPage';
 
 function Protected({ user, children }) {
   if (!user) return <Navigate to="/login" replace />;
@@ -30,6 +31,7 @@ export function App({ user, setUser }) {
         }
       >
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/user-data" element={<UserDataPage />} />
         <Route
           path="/admin"
           element={

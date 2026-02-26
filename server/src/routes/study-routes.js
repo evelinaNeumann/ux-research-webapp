@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { Study } from '../models/Study.js';
+import { StudyAssignment } from '../models/StudyAssignment.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, badRequest } from '../utils/errors.js';
@@ -9,7 +10,12 @@ const router = Router();
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req.query);
-    const query = req.auth.role === 'admin' ? {} : { is_active: true };
+    let query = {};
+    if (req.auth.role !== 'admin') {
+      const assignments = await StudyAssignment.find({ user_id: req.auth.sub, is_active: true }, { study_id: 1 });
+      const studyIds = assignments.map((x) => x.study_id);
+      query = { _id: { $in: studyIds }, is_active: true };
+    }
     const [items, total] = await Promise.all([
       Study.find(query).sort({ created_at: -1 }).skip(skip).limit(limit),
       Study.countDocuments(query),
@@ -24,7 +30,15 @@ router.get('/:id', requireAuth, async (req, res, next) => {
   try {
     const study = await Study.findById(req.params.id);
     if (!study) throw notFound('study not found');
-    if (!study.is_active && req.auth.role !== 'admin') throw notFound('study not found');
+    if (req.auth.role !== 'admin') {
+      if (!study.is_active) throw notFound('study not found');
+      const assignment = await StudyAssignment.findOne({
+        study_id: study._id,
+        user_id: req.auth.sub,
+        is_active: true,
+      });
+      if (!assignment) throw notFound('study not found');
+    }
     res.json(study);
   } catch (err) {
     next(err);
