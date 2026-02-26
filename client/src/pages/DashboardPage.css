@@ -1,0 +1,49 @@
+.dashboard-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.row-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.65rem;
+}
+
+.row-item small {
+  display: block;
+  color: #6b7280;
+}
+
+.password-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.password-field span {
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.password-input-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem;
+}
+
+.password-input-wrap input {
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.95rem;
+}
+
+.toggle-btn {
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.55rem 0.7rem;
+  color: #334155;
+}

@@ -1,0 +1,22 @@
+import mongoose from 'mongoose';
+
+const studySchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    type: {
+      type: String,
+      enum: ['questionnaire', 'card_sort', 'image_rating', 'mixed'],
+      default: 'mixed',
+      index: true,
+    },
+    version: { type: Number, default: 1 },
+    is_active: { type: Boolean, default: true, index: true },
+    module_order: {
+      type: [String],
+      default: ['questionnaire', 'card_sort', 'image_rating'],
+    },
+  },
+  { timestamps: { createdAt: 'created_at', updatedAt: true } }
+);
+
+export const Study = mongoose.model('Study', studySchema);

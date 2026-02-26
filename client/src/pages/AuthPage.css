@@ -1,0 +1,61 @@
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+}
+
+.auth-card {
+  width: min(420px, 92vw);
+  padding: 1.2rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.primary-btn {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.error-text {
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.password-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.password-field span {
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.password-input-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem;
+}
+
+.password-input-wrap input {
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.95rem;
+}
+
+.toggle-btn {
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.55rem 0.7rem;
+  color: #334155;
+}

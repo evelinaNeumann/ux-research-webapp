@@ -1,0 +1,52 @@
+.layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  background: #f5f7fb;
+}
+
+.layout-sidebar {
+  padding: 1.2rem;
+  border-right: 1px solid #e3e6ef;
+  background: #fcfcfe;
+}
+
+.layout-sidebar h1 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+}
+
+.layout-sidebar nav {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.layout-sidebar a {
+  text-decoration: none;
+  color: #334155;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+}
+
+.layout-sidebar a:hover {
+  background: #eef2ff;
+  color: #1d4ed8;
+}
+
+.layout-main {
+  padding: 1.2rem;
+}
+
+.ghost-btn {
+  border: 1px solid #d5dbea;
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
