@@ -10,6 +10,7 @@ import { Study } from '../models/Study.js';
 import { User } from '../models/User.js';
 import { StudyAssignment } from '../models/StudyAssignment.js';
 import { StudyProfileCard } from '../models/StudyProfileCard.js';
+import { CardSortColumn } from '../models/CardSortColumn.js';
 import {
   UserStudyProfile,
   USER_PROFILE_AGE_RANGES,
@@ -179,6 +180,43 @@ router.put('/profile-cards/:cardId', async (req, res, next) => {
 router.delete('/profile-cards/:cardId', async (req, res, next) => {
   const item = await StudyProfileCard.findById(req.params.cardId);
   if (!item) return next(notFound('profile card not found'));
+  item.is_active = false;
+  await item.save();
+  res.status(204).send();
+});
+
+router.get('/studies/:studyId/card-sort-columns', async (req, res) => {
+  const items = await CardSortColumn.find({ study_id: req.params.studyId, is_active: true }).sort({ order_index: 1 });
+  res.json(items);
+});
+
+router.post('/studies/:studyId/card-sort-columns', async (req, res, next) => {
+  const { label } = req.body;
+  if (!String(label || '').trim()) return next(badRequest('label required'));
+  const count = await CardSortColumn.countDocuments({ study_id: req.params.studyId, is_active: true });
+  const item = await CardSortColumn.create({
+    study_id: req.params.studyId,
+    label: String(label).trim(),
+    order_index: count,
+    is_active: true,
+  });
+  res.status(201).json(item);
+});
+
+router.put('/card-sort-columns/:columnId', async (req, res, next) => {
+  const { label, order_index, is_active } = req.body;
+  const item = await CardSortColumn.findById(req.params.columnId);
+  if (!item) return next(notFound('card sort column not found'));
+  if (label !== undefined) item.label = String(label).trim();
+  if (order_index !== undefined) item.order_index = Number(order_index);
+  if (is_active !== undefined) item.is_active = !!is_active;
+  await item.save();
+  res.json(item);
+});
+
+router.delete('/card-sort-columns/:columnId', async (req, res, next) => {
+  const item = await CardSortColumn.findById(req.params.columnId);
+  if (!item) return next(notFound('card sort column not found'));
   item.is_active = false;
   await item.save();
   res.status(204).send();

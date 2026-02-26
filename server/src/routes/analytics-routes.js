@@ -68,6 +68,20 @@ function toPdfEntries(report) {
   const entries = [];
   const push = (text, opts = {}) => entries.push({ text, ...opts });
   const spacer = (size = 8) => entries.push({ spacer: size });
+  const pushBars = (rows, labelMapper) => {
+    const max = Math.max(...rows.map((r) => r.count), 1);
+    const total = Math.max(report.totalFiltered || 0, 1);
+    rows.forEach((row) =>
+      entries.push({
+        bar: {
+          label: labelMapper(row),
+          count: row.count,
+          percent: Math.round((row.count / total) * 100),
+          ratio: row.count / max,
+        },
+      })
+    );
+  };
 
   push('Anlage: User Portraits und Profil-Daten Auswertung', { bold: true, size: 16 });
   push('Projektbericht Kurs: DLBMIUID02 - User Interface Design', { size: 12 });
@@ -103,7 +117,7 @@ function toPdfEntries(report) {
   if (!report.aggregates.age_ranges.length) {
     push('Keine Daten vorhanden.', { size: 10, indent: 16 });
   } else {
-    report.aggregates.age_ranges.forEach((row) => push(`- ${row.key}: ${row.count}`, { size: 10, indent: 16 }));
+    pushBars(report.aggregates.age_ranges, (row) => row.key);
   }
   spacer(4);
 
@@ -111,7 +125,7 @@ function toPdfEntries(report) {
   if (!report.aggregates.roles.length) {
     push('Keine Daten vorhanden.', { size: 10, indent: 16 });
   } else {
-    report.aggregates.roles.forEach((row) => push(`- ${roleLabel(row.key, '')}: ${row.count}`, { size: 10, indent: 16, wrap: true }));
+    pushBars(report.aggregates.roles, (row) => roleLabel(row.key, ''));
   }
   spacer(4);
 
@@ -119,7 +133,7 @@ function toPdfEntries(report) {
   if (!report.aggregates.key_points.length) {
     push('Keine Daten vorhanden.', { size: 10, indent: 16 });
   } else {
-    report.aggregates.key_points.forEach((row) => push(`- ${row.key}: ${row.count}`, { size: 10, indent: 16, wrap: true }));
+    pushBars(report.aggregates.key_points.slice(0, 12), (row) => row.key);
   }
 
   return entries;
@@ -129,6 +143,53 @@ function toModulePdfEntries(report) {
   const entries = [];
   const push = (text, opts = {}) => entries.push({ text, ...opts });
   const spacer = (size = 8) => entries.push({ spacer: size });
+  const piePalette = ['#1d4ed8', '#f59e0b', '#16a34a', '#db2777', '#0ea5e9', '#7c3aed', '#ef4444', '#14b8a6'];
+  const pushBars = (rows, labelMapper, totalOverride = null, maxItems = 12) => {
+    const source = Array.isArray(rows) ? rows.slice(0, maxItems) : [];
+    if (!source.length) {
+      push('Keine Daten vorhanden.', { size: 10, indent: 16 });
+      return;
+    }
+    const max = Math.max(...source.map((r) => Number(r.count || 0)), 1);
+    const total =
+      totalOverride !== null
+        ? Math.max(Number(totalOverride) || 0, 1)
+        : Math.max(source.reduce((sum, row) => sum + (Number(row.count) || 0), 0), 1);
+    source.forEach((row) =>
+      entries.push({
+        bar: {
+          label: labelMapper(row),
+          count: Number(row.count || 0),
+          percent: Math.round(((Number(row.count || 0) || 0) / total) * 100),
+          ratio: (Number(row.count || 0) || 0) / max,
+        },
+      })
+    );
+  };
+  const pushPie = (rows, labelMapper, totalOverride = null, maxItems = 8) => {
+    const source = Array.isArray(rows) ? rows.slice(0, maxItems) : [];
+    if (!source.length) {
+      push('Keine Daten vorhanden.', { size: 10, indent: 16 });
+      return;
+    }
+    const total =
+      totalOverride !== null
+        ? Math.max(Number(totalOverride) || 0, 1)
+        : Math.max(source.reduce((sum, row) => sum + (Number(row.count) || 0), 0), 1);
+    const segments = source.map((row, idx) => ({
+      label: labelMapper(row),
+      value: Number(row.count || 0),
+      percent: Math.round(((Number(row.count || 0) || 0) / total) * 100),
+      color: piePalette[idx % piePalette.length],
+    }));
+    entries.push({ pie: { segments } });
+  };
+  const imageRows = (report.overview.image_rating || [])
+    .map((row) => ({
+      label: `Bild ${String(row._id)}`,
+      count: Number((Number(row.avg || 0)).toFixed(2)),
+    }))
+    .sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label), 'de-DE'));
 
   push('Anlage: Studienmodule Auswertung', { bold: true, size: 16 });
   push('Projektbericht Kurs: DLBMIUID02 - User Interface Design', { size: 12 });
@@ -145,6 +206,14 @@ function toModulePdfEntries(report) {
   push(`Teilnahmen gesamt: ${report.overview.sessions_total ?? 0}`, { size: 10, indent: 16 });
   push(`Abgeschlossen: ${report.overview.sessions_done ?? 0}`, { size: 10, indent: 16 });
   push(`Abschlussrate: ${report.overview.completion_rate ?? 0}%`, { size: 10, indent: 16 });
+  spacer(4);
+  pushBars(
+    [
+      { key: 'Teilnahmen gesamt', count: report.overview.sessions_total ?? 0 },
+      { key: 'Abgeschlossen', count: report.overview.sessions_done ?? 0 },
+    ],
+    (row) => row.key
+  );
   spacer(10);
 
   push('2. Interview', { bold: true, size: 13 });
@@ -164,10 +233,112 @@ function toModulePdfEntries(report) {
       spacer(4);
     });
   }
+  const interviewChartRows = (report.overview.questionnaire || [])
+    .map((q) => ({ key: q.question_text || String(q._id), count: q.n || 0 }))
+    .filter((row) => row.count > 0);
+  spacer(4);
+  push('2.1 Diagramm: Antworten je Interview-Frage', { bold: true, size: 11 });
+  pushBars(interviewChartRows, (row) => row.key, null, 20);
   spacer(8);
 
   push('3. Card Sorting', { bold: true, size: 13 });
-  push(`Submissions: ${report.overview.card_sort_submissions ?? 0}`, { size: 10, indent: 16 });
+  push(`Submissions gesamt: ${report.overview.card_sort_submissions ?? 0}`, { size: 10, indent: 16 });
+  push(`Aktuelle Session-Staende: ${report.overview.card_sort?.latest_session_submissions ?? 0}`, {
+    size: 10,
+    indent: 16,
+  });
+  spacer(4);
+
+  push('3.1 Verteilung nach Spalten', { bold: true, size: 11 });
+  pushPie(
+    report.overview.card_sort?.column_distribution || [],
+    (row) => row.column,
+    report.overview.card_sort?.column_distribution?.reduce((sum, row) => sum + (Number(row.count) || 0), 0) || null,
+    8
+  );
+  spacer(4);
+
+  push('3.2 Kartenhaeufigkeit (Top)', { bold: true, size: 11 });
+  pushPie(
+    (report.overview.card_sort?.card_distribution || []).map((row) => ({
+      key: row.card_label,
+      count: row.count,
+    })),
+    (row) => row.key,
+    report.overview.card_sort?.card_distribution?.reduce((sum, row) => sum + (Number(row.count) || 0), 0) || null,
+    8
+  );
+  spacer(4);
+
+  push('3.3 Diagramm: Spalte -> Cards (Top je Spalte)', { bold: true, size: 11 });
+  const colCardRows = report.overview.card_sort?.column_card_distribution || [];
+  if (!colCardRows.length) {
+    push('Keine Spalten-/Kartenzuordnungen vorhanden.', { size: 10, indent: 16 });
+  } else {
+    colCardRows.slice(0, 10).forEach((col) => {
+      push(`Spalte: ${col.column}`, { bold: true, size: 10, indent: 16, wrap: true });
+      pushPie(
+        (col.cards || []).slice(0, 8).map((card) => ({ key: card.card_label, count: card.count })),
+        (row) => row.key,
+        col.total || null,
+        8
+      );
+      spacer(3);
+    });
+  }
+  spacer(4);
+
+  push('3.4 Diagramm: Card -> Spalten (Top je Card)', { bold: true, size: 11 });
+  const cardColRows = report.overview.card_sort?.card_column_distribution || [];
+  if (!cardColRows.length) {
+    push('Keine Card-zu-Spalten-Zuordnungen vorhanden.', { size: 10, indent: 16 });
+  } else {
+    cardColRows.slice(0, 15).forEach((card) => {
+      push(`Card: ${card.card_label}`, { bold: true, size: 10, indent: 16, wrap: true });
+      pushPie(
+        (card.columns || []).slice(0, 8).map((col) => ({ key: col.column, count: col.count })),
+        (row) => row.key,
+        card.total || null,
+        8
+      );
+      spacer(3);
+    });
+  }
+  spacer(4);
+
+  push('3.5 User-Ideen Kategorie', { bold: true, size: 11 });
+  push(`Benutzerdefinierte Spalten: ${report.overview.card_sort?.user_idea?.custom_columns_total ?? 0}`, {
+    size: 10,
+    indent: 16,
+  });
+  push(`Benutzerdefinierte Karten: ${report.overview.card_sort?.user_idea?.custom_cards_total ?? 0}`, {
+    size: 10,
+    indent: 16,
+  });
+  spacer(2);
+  push('3.5.1 Diagramm: Eigene Spalten (Name)', { bold: true, size: 10 });
+  pushPie(
+    report.overview.card_sort?.user_idea?.custom_columns_by_name || [],
+    (row) => row.column,
+    report.overview.card_sort?.user_idea?.custom_columns_total ?? null,
+    8
+  );
+  spacer(2);
+  push('3.5.2 Diagramm: Eigene Cards (Top)', { bold: true, size: 10 });
+  pushPie(
+    report.overview.card_sort?.user_idea?.custom_cards_by_label || [],
+    (row) => row.label,
+    report.overview.card_sort?.user_idea?.custom_cards_total ?? null,
+    8
+  );
+  spacer(2);
+  push('3.5.3 Diagramm: Eigene Cards je Spalte', { bold: true, size: 10 });
+  pushPie(
+    report.overview.card_sort?.user_idea?.custom_cards_by_column || [],
+    (row) => row.column,
+    report.overview.card_sort?.user_idea?.custom_cards_total ?? null,
+    8
+  );
   spacer(8);
 
   push('4. Bildauswertung', { bold: true, size: 13 });
@@ -181,7 +352,86 @@ function toModulePdfEntries(report) {
       );
     });
   }
+  spacer(4);
+  push('4.1 Diagramm: Durchschnittsbewertung je Bild', { bold: true, size: 11 });
+  pushBars(
+    imageRows,
+    (row) => row.label,
+    null,
+    20
+  );
   return entries;
+}
+
+function buildModulesCharts(overview = {}) {
+  return {
+    kpi: {
+      chart_type: 'bar',
+      labels: ['Teilnahmen gesamt', 'Abgeschlossen'],
+      series: [overview.sessions_total ?? 0, overview.sessions_done ?? 0],
+    },
+    interview_answers_per_question: {
+      chart_type: 'bar',
+      labels: (overview.questionnaire || []).map((q) => q.question_text || String(q._id)),
+      series: (overview.questionnaire || []).map((q) => q.n || 0),
+    },
+    card_sort_columns: {
+      chart_type: 'bar',
+      labels: (overview.card_sort?.column_distribution || []).map((row) => row.column),
+      series: (overview.card_sort?.column_distribution || []).map((row) => row.count || 0),
+    },
+    card_sort_cards_top: {
+      chart_type: 'bar',
+      labels: (overview.card_sort?.card_distribution || []).slice(0, 20).map((row) => row.card_label),
+      series: (overview.card_sort?.card_distribution || []).slice(0, 20).map((row) => row.count || 0),
+    },
+    card_sort_card_to_columns: {
+      chart_type: 'grouped_bar',
+      series: (overview.card_sort?.card_column_distribution || []).slice(0, 20).map((card) => ({
+        key: card.card_label,
+        labels: (card.columns || []).map((col) => col.column),
+        values: (card.columns || []).map((col) => col.count || 0),
+      })),
+    },
+    user_idea_columns_by_name: {
+      chart_type: 'bar',
+      labels: (overview.card_sort?.user_idea?.custom_columns_by_name || []).map((row) => row.column),
+      series: (overview.card_sort?.user_idea?.custom_columns_by_name || []).map((row) => row.count || 0),
+    },
+    user_idea_cards_by_label_top: {
+      chart_type: 'bar',
+      labels: (overview.card_sort?.user_idea?.custom_cards_by_label || []).slice(0, 20).map((row) => row.label),
+      series: (overview.card_sort?.user_idea?.custom_cards_by_label || []).slice(0, 20).map((row) => row.count || 0),
+    },
+    image_rating_average: {
+      chart_type: 'bar',
+      labels: (overview.image_rating || []).map((row) => `Bild ${String(row._id)}`),
+      series: (overview.image_rating || []).map((row) => Number((Number(row.avg || 0)).toFixed(2))),
+    },
+  };
+}
+
+function hexToRgbNorm(hex) {
+  const raw = String(hex || '').replace('#', '').trim();
+  const full = raw.length === 3 ? raw.split('').map((ch) => ch + ch).join('') : raw;
+  const valid = full.length === 6 ? full : '1d4ed8';
+  const r = parseInt(valid.slice(0, 2), 16) / 255;
+  const g = parseInt(valid.slice(2, 4), 16) / 255;
+  const b = parseInt(valid.slice(4, 6), 16) / 255;
+  return [Number(r.toFixed(4)), Number(g.toFixed(4)), Number(b.toFixed(4))];
+}
+
+function buildPieSlicePath(cx, cy, radius, startAngle, endAngle) {
+  const sweep = Math.max(0.001, endAngle - startAngle);
+  const steps = Math.max(6, Math.ceil((sweep / (Math.PI * 2)) * 40));
+  const points = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const t = startAngle + ((endAngle - startAngle) * i) / steps;
+    const x = cx + Math.cos(t) * radius;
+    const y = cy + Math.sin(t) * radius;
+    points.push(`${x.toFixed(2)} ${y.toFixed(2)}`);
+  }
+  return `${cx.toFixed(2)} ${cy.toFixed(2)} m ${points.join(' l ')} l h`;
 }
 
 function paginateEntries(entries) {
@@ -203,6 +453,37 @@ function paginateEntries(entries) {
       continue;
     }
 
+    if (entry.bar) {
+      const rowHeight = 18;
+      if (y - rowHeight < bottomY) pushPage();
+      pages[pages.length - 1].push({
+        type: 'bar',
+        x: leftX + 16,
+        y,
+        label: entry.bar.label,
+        count: entry.bar.count,
+        percent: entry.bar.percent,
+        ratio: entry.bar.ratio,
+      });
+      y -= rowHeight;
+      continue;
+    }
+
+    if (entry.pie) {
+      const segCount = Array.isArray(entry.pie.segments) ? entry.pie.segments.length : 0;
+      const rowHeight = Math.max(120, 34 + segCount * 14);
+      if (y - rowHeight < bottomY) pushPage();
+      pages[pages.length - 1].push({
+        type: 'pie',
+        x: leftX + 16,
+        y,
+        height: rowHeight,
+        segments: entry.pie.segments || [],
+      });
+      y -= rowHeight;
+      continue;
+    }
+
     const fontSize = entry.size || 11;
     const lineHeight = Math.max(12, Math.round(fontSize * 1.35));
     const indent = entry.indent || 0;
@@ -212,6 +493,7 @@ function paginateEntries(entries) {
     for (const line of lines) {
       if (y - lineHeight < bottomY) pushPage();
       pages[pages.length - 1].push({
+        type: 'text',
         text: line,
         x: leftX + indent,
         y,
@@ -241,11 +523,64 @@ function createStructuredPdf(entries) {
     const contentObjNum = pageObjNum + 1;
     kidRefs.push(`${pageObjNum} 0 R`);
 
-    const textCommands = ['BT'];
+    const textCommands = [];
     for (const row of pages[idx]) {
-      textCommands.push(`/${row.bold ? 'F2' : 'F1'} ${row.size} Tf`);
-      textCommands.push(`1 0 0 1 ${row.x} ${row.y} Tm (${escapePdfText(row.text)}) Tj`);
+      if (row.type === 'bar') {
+        const barX = row.x + 170;
+        const barW = 220;
+        const barH = 10;
+        const fillW = Math.max(1, Math.round(barW * Math.max(0, Math.min(1, row.ratio || 0))));
+        textCommands.push('BT');
+        textCommands.push('/F1 10 Tf');
+        textCommands.push(`1 0 0 1 ${row.x} ${row.y} Tm (${escapePdfText(String(row.label))}) Tj`);
+        textCommands.push(`1 0 0 1 ${barX + barW + 10} ${row.y} Tm (${escapePdfText(`${row.count} (${row.percent}%)`)}) Tj`);
+        textCommands.push('ET');
+        textCommands.push('0.91 0.93 0.97 rg');
+        textCommands.push(`${barX} ${row.y - 8} ${barW} ${barH} re f`);
+        textCommands.push('0.13 0.35 0.88 rg');
+        textCommands.push(`${barX} ${row.y - 8} ${fillW} ${barH} re f`);
+      } else if (row.type === 'pie') {
+        const segments = Array.isArray(row.segments) ? row.segments : [];
+        if (!segments.length) continue;
+        const total = Math.max(segments.reduce((sum, seg) => sum + (Number(seg.value) || 0), 0), 1);
+        const cx = row.x + 60;
+        const cy = row.y - 42;
+        const radius = 28;
+        let angle = -Math.PI / 2;
+
+        segments.forEach((seg) => {
+          const value = Number(seg.value || 0);
+          if (value <= 0) return;
+          const frac = value / total;
+          const next = angle + frac * Math.PI * 2;
+          const [r, g, b] = hexToRgbNorm(seg.color);
+          textCommands.push(`${r} ${g} ${b} rg`);
+          textCommands.push(`${buildPieSlicePath(cx, cy, radius, angle, next)} f`);
+          angle = next;
+        });
+
+        let legendY = row.y - 10;
+        const legendX = row.x + 110;
+        segments.forEach((seg) => {
+          const [r, g, b] = hexToRgbNorm(seg.color);
+          textCommands.push(`${r} ${g} ${b} rg`);
+          textCommands.push(`${legendX} ${legendY - 8} 8 8 re f`);
+          textCommands.push('BT');
+          textCommands.push('/F1 9 Tf');
+          textCommands.push(
+            `1 0 0 1 ${legendX + 13} ${legendY} Tm (${escapePdfText(`${seg.label}: ${seg.value} (${seg.percent}%)`)}) Tj`
+          );
+          textCommands.push('ET');
+          legendY -= 12;
+        });
+      } else {
+        textCommands.push('BT');
+        textCommands.push(`/${row.bold ? 'F2' : 'F1'} ${row.size} Tf`);
+        textCommands.push(`1 0 0 1 ${row.x} ${row.y} Tm (${escapePdfText(row.text)}) Tj`);
+        textCommands.push('ET');
+      }
     }
+    textCommands.push('BT');
     textCommands.push('/F1 9 Tf');
     textCommands.push(`1 0 0 1 46 28 Tm (DLBMIUID02 - User Interface Design | Seite ${idx + 1} von ${pageCount}) Tj`);
     textCommands.push('ET');
@@ -410,6 +745,7 @@ router.get('/study/:studyId/modules/export', async (req, res, next) => {
       studyId: req.params.studyId,
     });
     const overview = await analyticsOverview(filters);
+    const charts = buildModulesCharts(overview);
     const study = await Study.findById(req.params.studyId, { name: 1 });
 
     if (format === 'pdf') {
@@ -419,6 +755,7 @@ router.get('/study/:studyId/modules/export', async (req, res, next) => {
           generatedAt: new Date().toLocaleString('de-DE'),
           filters,
           overview,
+          charts,
         })
       );
       res.setHeader('Content-Type', 'application/pdf');
@@ -434,6 +771,7 @@ router.get('/study/:studyId/modules/export', async (req, res, next) => {
         generated_at: new Date().toISOString(),
         filters_applied: filters,
         overview,
+        charts,
       });
     }
 

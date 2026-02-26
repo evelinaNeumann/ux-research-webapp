@@ -1,49 +1,94 @@
+# MongoDB Schema Overview (aktueller Stand)
 
-# database-schema.md
-# MongoDB Schema Overview
-
-## User
+## users
+```js
 {
   _id,
   username,
   password_hash,
-  role,
-  created_at
+  role,               // 'user' | 'admin'
+  created_at,
+  updatedAt
 }
+```
 
-## Profile
-{
-  _id,
-  user_id,
-  age_group,
-  interests: [],
-  needs: [],
-  test_group_id
-}
-
-## Study
+## studies
+```js
 {
   _id,
   name,
-  type,
+  description,
+  type,               // 'questionnaire' | 'card_sort' | 'image_rating' | 'mixed'
   version,
+  is_active,
+  module_order: [String],
+  brief_pdf_path,
+  brief_pdf_name,
+  profile_cards_source_study_id, // optional
+  inherit_profile_cards,         // bool
+  inherit_user_profile_points,   // bool
+  created_at,
+  updatedAt
+}
+```
+
+## study_assignments
+```js
+{
+  _id,
+  study_id,
+  user_id,
+  assigned_by,
+  assigned_at,
   is_active
 }
+```
 
-## Session
+## study_profile_cards
+```js
+{
+  _id,
+  study_id,
+  label,
+  order_index,
+  is_active
+}
+```
+
+## user_study_profiles
+```js
+{
+  _id,
+  user_id,
+  study_id,
+  age_range,          // z.B. '20-30'
+  role_category,      // 'schueler_azubi_student' | 'angestellter_fachabteilung' | 'leitende_position' | 'other'
+  role_custom,
+  key_points: [String],
+  completed_at
+}
+```
+
+## sessions
+```js
 {
   _id,
   user_id,
   study_id,
   study_version,
   module_type,
-  status,
+  current_module,
+  status,             // 'in_progress' | 'done'
   started_at,
   completed_at,
-  duration_seconds
+  duration_seconds,
+  createdAt,
+  updatedAt
 }
+```
 
-## Question
+## questions
+```js
 {
   _id,
   study_id,
@@ -53,8 +98,10 @@
   required,
   version
 }
+```
 
-## Card
+## cards
+```js
 {
   _id,
   study_id,
@@ -62,8 +109,10 @@
   description,
   version
 }
+```
 
-## ImageAsset
+## image_assets
+```js
 {
   _id,
   study_id,
@@ -73,35 +122,42 @@
   version,
   uploaded_at
 }
+```
 
-## PageTreeNode
+## page_tree_nodes
+```js
 {
   _id,
   study_id,
   parent_id,
   title,
-  node_type,      // page | section | task_container
+  node_type,
   order_index,
   is_active,
   version
 }
+```
 
-## ResearchTask
+## research_tasks
+```js
 {
   _id,
   study_id,
   page_node_id,
   title,
   description,
-  task_type,      // instruction | question_block | cardsort_block | image_block | mixed
+  task_type,
   config: {},
   order_index,
   is_required,
   version
 }
+```
 
-## Answer
+## answers
+```js
 {
+  _id,
   session_id,
   user_id,
   study_id,
@@ -109,46 +165,54 @@
   response,
   created_at
 }
+```
 
-## CardSort
+## card_sorts
+```js
 {
+  _id,
   session_id,
   user_id,
   study_id,
-  card_groups: [
-    {
-      group_name,
-      card_ids: []
-    }
-  ],
+  card_groups: [{ group_name, card_ids: [] }],
   created_at
 }
+```
 
-## ImageRating
+## image_ratings
+```js
 {
+  _id,
   session_id,
   user_id,
   study_id,
   image_id,
   rating,
   feedback,
+  recall_answer,
   created_at
 }
+```
 
-## AnalyticsSnapshot (optional)
+## analytics_snapshots (optional)
+```js
 {
   _id,
-  scope_type,      // "user" | "study"
-  scope_id,        // user_id oder study_id
-  filters: {},
-  chart_type,      // bar | line | radar | heatmap | distribution
-  payload: {},
+  scope_type,
+  scope_id,
+  filters,
+  chart_type,
+  payload,
   generated_at
 }
+```
 
-## Empfohlene Indexe
-- sessions: { study_id: 1, user_id: 1, completed_at: -1 }
-- answers: { study_id: 1, user_id: 1, created_at: -1 }
-- image_ratings: { study_id: 1, user_id: 1, created_at: -1 }
-- page_tree_nodes: { study_id: 1, parent_id: 1, order_index: 1 }
-- research_tasks: { study_id: 1, page_node_id: 1, order_index: 1 }
+## Wichtige Indexe
+- `users`: `{ username: 1 }` unique
+- `studies`: `{ is_active: 1 }`, `{ type: 1 }`
+- `sessions`: `{ study_id: 1, user_id: 1, completed_at: -1 }`
+- `answers`: `{ study_id: 1, user_id: 1, created_at: -1 }`
+- `image_ratings`: `{ study_id: 1, user_id: 1, created_at: -1 }`
+- `study_profile_cards`: `{ study_id: 1, order_index: 1 }`
+- `user_study_profiles`: `{ user_id: 1, study_id: 1 }` unique
+- `analytics_snapshots`: `{ scope_type: 1, scope_id: 1, generated_at: -1 }`

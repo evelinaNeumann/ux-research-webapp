@@ -6,6 +6,11 @@ import { StudyAssignment } from '../models/StudyAssignment.js';
 import { UserStudyProfile } from '../models/UserStudyProfile.js';
 import { Question } from '../models/Question.js';
 import { Answer } from '../models/Answer.js';
+import { Card } from '../models/Card.js';
+import { CardSort } from '../models/CardSort.js';
+import { CardSortColumn } from '../models/CardSortColumn.js';
+import { ImageAsset } from '../models/ImageAsset.js';
+import { ImageRating } from '../models/ImageRating.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, forbidden, badRequest } from '../utils/errors.js';
 
@@ -86,9 +91,16 @@ router.put('/:id/complete', async (req, res, next) => {
     const item = await Session.findById(req.params.id);
     if (!item) throw notFound('session not found');
     if (req.auth.role !== 'admin' && String(item.user_id) !== req.auth.sub) throw forbidden();
+    const study = await Study.findById(item.study_id, { module_order: 1 });
+    if (!study) throw notFound('study not found');
+    const modules = study.module_order?.length ? study.module_order : ['questionnaire', 'card_sort', 'image_rating'];
 
-    const questions = await Question.find({ study_id: item.study_id }, { _id: 1 });
-    if (questions.length > 0) {
+    const needsQuestionnaire = modules.includes('questionnaire');
+    const needsCardSort = modules.includes('card_sort');
+    const needsImageRating = modules.includes('image_rating');
+
+    const questions = needsQuestionnaire ? await Question.find({ study_id: item.study_id }, { _id: 1 }) : [];
+    if (needsQuestionnaire && questions.length > 0) {
       const questionIds = questions.map((q) => String(q._id));
       const answers = await Answer.find(
         { session_id: item._id, question_id: { $in: questionIds } },
@@ -101,6 +113,47 @@ router.put('/:id/complete', async (req, res, next) => {
       );
       if (answered.size < questionIds.length) {
         throw badRequest('Bitte zuerst alle Interview-Fragen beantworten.');
+      }
+    }
+
+    if (needsCardSort) {
+      const [cards, columns] = await Promise.all([
+        Card.find({ study_id: item.study_id }, { _id: 1 }),
+        CardSortColumn.find({ study_id: item.study_id, is_active: true }, { _id: 1 }),
+      ]);
+      if (cards.length > 0 && columns.length === 0) {
+        throw badRequest('Card-Sorting-Spalten fehlen. Bitte Admin kontaktieren.');
+      }
+      if (cards.length > 0) {
+        const latestCardSort = await CardSort.findOne({ session_id: item._id }).sort({ created_at: -1 });
+        if (!latestCardSort) {
+          throw badRequest('Bitte zuerst alle Card-Sorting-Aufgaben fertigstellen.');
+        }
+        const assignedIds = new Set(
+          (latestCardSort.card_groups || []).flatMap((g) => (g.card_ids || []).map((id) => String(id)))
+        );
+        if (assignedIds.size < cards.length) {
+          throw badRequest('Bitte zuerst alle Card-Sorting-Aufgaben fertigstellen.');
+        }
+      }
+    }
+
+    if (needsImageRating) {
+      const images = await ImageAsset.find({ study_id: item.study_id }, { _id: 1 });
+      if (images.length > 0) {
+        const imageIds = images.map((x) => x._id);
+        const ratings = await ImageRating.find(
+          { session_id: item._id, image_id: { $in: imageIds } },
+          { image_id: 1, rating: 1 }
+        );
+        const rated = new Set(
+          ratings
+            .filter((r) => r.rating !== undefined && r.rating !== null && Number(r.rating) >= 1)
+            .map((r) => String(r.image_id))
+        );
+        if (rated.size < images.length) {
+          throw badRequest('Bitte zuerst alle Bildbewertungen fertigstellen.');
+        }
       }
     }
 

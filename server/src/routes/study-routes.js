@@ -3,6 +3,7 @@ import { Study } from '../models/Study.js';
 import { StudyAssignment } from '../models/StudyAssignment.js';
 import { Question } from '../models/Question.js';
 import { Card } from '../models/Card.js';
+import { CardSortColumn } from '../models/CardSortColumn.js';
 import { ImageAsset } from '../models/ImageAsset.js';
 import { StudyProfileCard } from '../models/StudyProfileCard.js';
 import { uploadStudyPdf } from '../middleware/upload-study-pdf.js';
@@ -99,6 +100,16 @@ router.get('/:id/cards', requireAuth, async (req, res, next) => {
   try {
     await assertStudyAccess(req.params.id, req.auth);
     const items = await Card.find({ study_id: req.params.id }).sort({ _id: 1 });
+    res.json(items);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id/card-sort-columns', requireAuth, async (req, res, next) => {
+  try {
+    await assertStudyAccess(req.params.id, req.auth);
+    const items = await CardSortColumn.find({ study_id: req.params.id, is_active: true }).sort({ order_index: 1 });
     res.json(items);
   } catch (err) {
     next(err);

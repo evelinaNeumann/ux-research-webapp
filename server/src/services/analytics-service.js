@@ -4,6 +4,7 @@ import { CardSort } from '../models/CardSort.js';
 import { Session } from '../models/Session.js';
 import { Question } from '../models/Question.js';
 import { UserStudyProfile } from '../models/UserStudyProfile.js';
+import { Card } from '../models/Card.js';
 import mongoose from 'mongoose';
 
 function buildSessionMatch(filters = {}) {
@@ -24,6 +25,12 @@ function buildStudyMatch(studyId) {
     return new mongoose.Types.ObjectId(studyId);
   }
   return studyId;
+}
+
+function toSortedRows(obj, keyName = 'key') {
+  return Object.entries(obj)
+    .map(([key, count]) => ({ [keyName]: key, count }))
+    .sort((a, b) => b.count - a.count || String(a[keyName]).localeCompare(String(b[keyName]), 'de-DE'));
 }
 
 function hasProfileFilters(filters = {}) {
@@ -151,6 +158,105 @@ export async function analyticsOverview(filters = {}) {
   const cardSortMatch = filters.studyId ? { study_id: studyMatch } : {};
   if (filteredUserIds) cardSortMatch.user_id = { $in: filteredUserIds };
   const cardsortCount = await CardSort.countDocuments(cardSortMatch);
+  const [studyCards, latestCardSortBySession] = await Promise.all([
+    Card.find(filters.studyId ? { study_id: studyMatch } : {}, { _id: 1, label: 1 }).lean(),
+    CardSort.aggregate([
+      { $match: cardSortMatch },
+      { $sort: { created_at: -1, _id: -1 } },
+      {
+        $group: {
+          _id: '$session_id',
+          doc: { $first: '$$ROOT' },
+        },
+      },
+      { $replaceRoot: { newRoot: '$doc' } },
+    ]),
+  ]);
+  const cardLabelById = new Map(studyCards.map((c) => [String(c._id), c.label || String(c._id)]));
+  const columnDist = {};
+  const cardDist = {};
+  const columnCardDist = {};
+  const cardColumnDist = {};
+  const userIdeaColumnDist = {};
+  const userIdeaColumnNameDist = {};
+  const userIdeaCardLabelDist = {};
+  let customColumnsTotal = 0;
+  let customCardsTotal = 0;
+
+  for (const cs of latestCardSortBySession) {
+    for (const group of cs.card_groups || []) {
+      const groupName = String(group.group_name || '').trim();
+      if (!groupName) continue;
+      const ids = (group.card_ids || []).map((id) => String(id));
+      columnDist[groupName] = (columnDist[groupName] || 0) + ids.length;
+      if (!columnCardDist[groupName]) columnCardDist[groupName] = {};
+      for (const id of ids) {
+        cardDist[id] = (cardDist[id] || 0) + 1;
+        const label = cardLabelById.get(id) || id;
+        columnCardDist[groupName][label] = (columnCardDist[groupName][label] || 0) + 1;
+        if (!cardColumnDist[label]) cardColumnDist[label] = {};
+        cardColumnDist[label][groupName] = (cardColumnDist[label][groupName] || 0) + 1;
+      }
+    }
+    const customColumns = cs.user_idea_category?.custom_columns || [];
+    const customCards = cs.user_idea_category?.custom_cards || [];
+    customColumnsTotal += customColumns.length;
+    customCardsTotal += customCards.length;
+    for (const customColumn of customColumns) {
+      const columnName = String(customColumn || '').trim();
+      if (!columnName) continue;
+      userIdeaColumnNameDist[columnName] = (userIdeaColumnNameDist[columnName] || 0) + 1;
+    }
+    for (const customCard of customCards) {
+      const col = String(customCard?.column || '').trim() || 'ohne_spalte';
+      const label = String(customCard?.label || '').trim();
+      userIdeaColumnDist[col] = (userIdeaColumnDist[col] || 0) + 1;
+      if (label) userIdeaCardLabelDist[label] = (userIdeaCardLabelDist[label] || 0) + 1;
+    }
+  }
+
+  const cardDistribution = Object.entries(cardDist)
+    .map(([card_id, count]) => ({
+      card_id,
+      card_label: cardLabelById.get(card_id) || card_id,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count || String(a.card_label).localeCompare(String(b.card_label), 'de-DE'));
+
+  const columnCardDistribution = Object.entries(columnCardDist)
+    .map(([column, cardMap]) => ({
+      column,
+      total: Object.values(cardMap).reduce((sum, value) => sum + value, 0),
+      cards: Object.entries(cardMap)
+        .map(([card_label, count]) => ({ card_label, count }))
+        .sort((a, b) => b.count - a.count || String(a.card_label).localeCompare(String(b.card_label), 'de-DE')),
+    }))
+    .sort((a, b) => b.total - a.total || String(a.column).localeCompare(String(b.column), 'de-DE'));
+  const cardColumnDistribution = Object.entries(cardColumnDist)
+    .map(([card_label, columnMap]) => ({
+      card_label,
+      total: Object.values(columnMap).reduce((sum, value) => sum + value, 0),
+      columns: Object.entries(columnMap)
+        .map(([column, count]) => ({ column, count }))
+        .sort((a, b) => b.count - a.count || String(a.column).localeCompare(String(b.column), 'de-DE')),
+    }))
+    .sort((a, b) => b.total - a.total || String(a.card_label).localeCompare(String(b.card_label), 'de-DE'));
+
+  const cardSort = {
+    submissions_total: cardsortCount,
+    latest_session_submissions: latestCardSortBySession.length,
+    column_distribution: toSortedRows(columnDist, 'column'),
+    column_card_distribution: columnCardDistribution,
+    card_column_distribution: cardColumnDistribution,
+    card_distribution: cardDistribution,
+    user_idea: {
+      custom_columns_total: customColumnsTotal,
+      custom_cards_total: customCardsTotal,
+      custom_columns_by_name: toSortedRows(userIdeaColumnNameDist, 'column'),
+      custom_cards_by_column: toSortedRows(userIdeaColumnDist, 'column'),
+      custom_cards_by_label: toSortedRows(userIdeaCardLabelDist, 'label'),
+    },
+  };
 
   return {
     sessions_total: sessionsTotal,
@@ -159,6 +265,7 @@ export async function analyticsOverview(filters = {}) {
     questionnaire,
     image_rating: imageAvg,
     card_sort_submissions: cardsortCount,
+    card_sort: cardSort,
   };
 }
 

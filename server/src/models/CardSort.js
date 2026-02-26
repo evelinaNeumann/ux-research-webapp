@@ -14,6 +14,18 @@ const cardSortSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    user_idea_category: {
+      custom_columns: { type: [String], default: [] },
+      custom_cards: {
+        type: [
+          {
+            label: { type: String, required: true },
+            column: { type: String, default: '' },
+          },
+        ],
+        default: [],
+      },
+    },
     created_at: { type: Date, default: Date.now },
   },
   { versionKey: false }

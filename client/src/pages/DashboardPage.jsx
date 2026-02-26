@@ -76,14 +76,16 @@ export function DashboardPage({ user }) {
           : ['questionnaire', 'card_sort', 'image_rating'];
 
         if (!totalByStudyId[studyId]) {
-          const [q, c, i] = await Promise.all([
+          const [q, c, columns, i] = await Promise.all([
             studyApi.getQuestions(studyId),
             studyApi.getCards(studyId),
+            studyApi.getCardSortColumns(studyId),
             studyApi.getImages(studyId),
           ]);
           totalByStudyId[studyId] = {
             questionnaire: q.length,
             card_sort: c.length,
+            card_sort_columns: columns.length,
             image_rating: i.length,
           };
         }
@@ -91,7 +93,7 @@ export function DashboardPage({ user }) {
         const totals = totalByStudyId[studyId];
         const availableModules = modules.filter((m) => {
           if (m === 'questionnaire') return totals.questionnaire > 0;
-          if (m === 'card_sort') return totals.card_sort > 0;
+          if (m === 'card_sort') return totals.card_sort > 0 && totals.card_sort_columns > 0;
           if (m === 'image_rating') return totals.image_rating > 0;
           return false;
         });
@@ -110,7 +112,7 @@ export function DashboardPage({ user }) {
 
         const completedByModule = {
           questionnaire: answeredCount >= totals.questionnaire,
-          card_sort: cardSelectedCount > 0,
+          card_sort: cardSelectedCount >= totals.card_sort && totals.card_sort > 0,
           image_rating: ratedCount >= totals.image_rating,
         };
         const completedModules = availableModules.filter((m) => completedByModule[m]).length;

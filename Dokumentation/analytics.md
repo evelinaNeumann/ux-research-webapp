@@ -1,81 +1,78 @@
+# Analytics & Auswertungslogik (aktuell)
 
-# analytics.md
-# Analytics & Aggregation Logic
+## 1. Quellen
+- `sessions`
+- `answers`
+- `card_sorts`
+- `image_ratings`
+- `user_study_profiles`
+- `questions`
 
-## 1. Likert-Skalen Auswertung
-- Durchschnitt (avg)
-- Standardabweichung
-- Gruppenvergleich
+## 2. KPI-Logik
+- `sessions_total`: Anzahl Sessions im Filterraum.
+- `sessions_done`: abgeschlossene Sessions.
+- `completion_rate`: `sessions_done / sessions_total * 100`.
 
-MongoDB Aggregation Beispiel:
-$group: {
-  _id: "$question_id",
-  avgRating: { $avg: "$response" }
-}
+## 3. Interview-Logik
+- Fragebasis aus `questions` je Studie.
+- Antworten werden als letzte Antwort pro `(session_id, question_id)` ausgewertet.
+- Ausgabe pro Frage:
+  - `question_text`
+  - `n` (Anzahl Antworten)
+  - `answers[]` (einzeln, inkl. Duplikate)
+  - `answer_distribution[]` (für Exportzwecke)
 
----
+## 4. Modul-Logik
+- Card Sorting:
+  - `card_sort_submissions` (alle gespeicherten Stände)
+  - `latest_session_submissions` (je Session letzter Stand)
+  - `column_distribution[]` (Zuordnungen je Spalte)
+  - `column_card_distribution[]` (pro Spalte: welche Karten wie häufig)
+  - `card_column_distribution[]` (pro Karte: zu welchen Spalten wie häufig)
+  - `card_distribution[]` (Häufigkeit je Karte)
+  - `user_idea`:
+    - `custom_columns_total`
+    - `custom_cards_total`
+    - `custom_columns_by_name[]`
+    - `custom_cards_by_column[]`
+    - `custom_cards_by_label[]`
+- Bildauswertung: Durchschnitt + N pro Bild.
 
-## 2. Häufigkeitsanalyse
-$group: {
-  _id: "$response",
-  count: { $sum: 1 }
-}
+## 5. Profilfilter (global für Analytics)
+Filter: `age`, `role`, `keyword`
+- Filtert zunächst passende User über `user_study_profiles`.
+- Danach werden Sessions/Answers/CardSort/ImageRating auf diese User eingeschränkt.
+- Wirkt auf:
+  - KPI
+  - Studienmodule
+  - Exporte der Studienmodule
 
----
+## 6. User Portraits & Profil-Daten
+- Endpunkt liefert:
+  - Einzelprofile (`items`)
+  - Aggregationen (`age_ranges`, `roles`, `key_points`)
+- Optional mit `age/role/keyword` filterbar.
 
-## 3. Gruppenfilter
-$match: {
-  test_group_id: "groupId"
-}
+## 7. Exporte
+### 7.1 Allgemeiner Export
+- `GET /analytics/export?format=csv|json`
 
----
+### 7.2 User Portraits + Profil-Daten
+- `GET /analytics/study/:studyId/user-portraits/export?format=json|pdf`
+- PDF ist strukturiert (Titel, Metadaten, Abschnitte, Seitenzahlen, Umbruch, Umlaute korrekt)
 
-## 4. Card Sorting Aggregation
-- Häufigkeit gemeinsamer Kartenplatzierung
-- Erstellung einer Ähnlichkeitsmatrix
+### 7.3 Studienmodule
+- `GET /analytics/study/:studyId/modules/export?format=json|pdf`
+- Enthält KPI + Interview + Card Sorting (inkl. Verteilungen/User-Ideen) + Bildauswertung.
+- PDF enthält zusätzlich Diagramme:
+  - KPI/Interview/Bildauswertung als Balkendiagramme
+  - Card-Sorting-Zuordnungen als Kreisdiagramme
+- JSON enthält zusätzlich ein `charts`-Objekt mit `labels[]` und `series[]` je Diagrammblock.
+- Card Sorting im Report enthält zusätzlich `Card -> Spalten` Diagramme (Häufigkeit pro Card und Zielspalte).
 
----
-
-## 5. Export
-- CSV für Projektbericht
-- JSON für Weiterverarbeitung
-- PNG für Diagramme im Projektbericht
-
----
-
-## 6. User View Aggregation (pro Nutzer:in)
-- Aggregation pro `user_id`, `study_id`, `module_type`
-- Verlauf je Session (Zeitreihe: `started_at`, `completed_at`, Score/Rating)
-- Delta-Berechnung: Nutzerwert vs. Studiendurchschnitt
-
-MongoDB Aggregation Beispiel:
-$group: {
-  _id: { user: "$user_id", study: "$study_id", module: "$module_type" },
-  sessions: { $sum: 1 },
-  avgScore: { $avg: "$numeric_score" }
-}
-
----
-
-## 7. Study View Aggregation (pro Studie)
-- KPI-Kacheln: Teilnehmerzahl, Abschlussrate, Durchschnittswerte, Streuung
-- Segmentvergleich nach Testgruppe und Studienversion
-- Modulspezifische Zusammenfassung innerhalb einer Studie
-
-MongoDB Aggregation Beispiel:
-$group: {
-  _id: { study: "$study_id", version: "$study_version", group: "$test_group_id" },
-  participants: { $addToSet: "$user_id" },
-  completed: { $sum: { $cond: [{ $eq: ["$status", "done"] }, 1, 0] } },
-  avgRating: { $avg: "$rating" }
-}
-
----
-
-## 8. Chart Payload (UI)
-- Standardisiertes Format pro Diagramm:
+## 8. Chart Payload
+Standardformat:
 - `chart_type`
 - `labels[]`
 - `series[]`
 - `filters_applied`
-- `generated_at`

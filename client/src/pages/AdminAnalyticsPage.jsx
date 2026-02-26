@@ -149,6 +149,65 @@ export function AdminAnalyticsPage() {
       </div>
     );
   };
+  const renderCountBars = (rows, labelFn, emptyText = 'Keine Daten vorhanden.') => {
+    if (!rows?.length) return <p>{emptyText}</p>;
+    const max = Math.max(...rows.map((r) => r.count), 1);
+    return (
+      <div className="dist-wrap">
+        {rows.map((row, idx) => {
+          const width = Math.round((row.count / max) * 100);
+          return (
+            <div key={`${labelFn(row)}-${idx}`} className="dist-row">
+              <span className="dist-label">{labelFn(row)}</span>
+              <div className="bar-track">
+                <div className="bar-fill" style={{ width: `${width}%` }} />
+              </div>
+              <strong className="dist-value">{row.count}</strong>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+  const renderPieChart = (rows, labelFn, emptyText = 'Keine Daten vorhanden.') => {
+    if (!rows?.length) return <p>{emptyText}</p>;
+    const total = rows.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+    if (total <= 0) return <p>{emptyText}</p>;
+    const palette = ['#1d4ed8', '#f59e0b', '#16a34a', '#db2777', '#0ea5e9', '#7c3aed', '#ef4444', '#14b8a6'];
+    let current = 0;
+    const segments = rows.map((row, idx) => {
+      const value = Number(row.count) || 0;
+      const start = current;
+      const fraction = value / total;
+      current += fraction;
+      return {
+        label: labelFn(row),
+        value,
+        percent: Math.round(fraction * 100),
+        color: palette[idx % palette.length],
+        start,
+        end: current,
+      };
+    });
+    const gradient = segments
+      .map((s) => `${s.color} ${(s.start * 100).toFixed(2)}% ${(s.end * 100).toFixed(2)}%`)
+      .join(', ');
+
+    return (
+      <div className="pie-block">
+        <div className="pie-chart" style={{ background: `conic-gradient(${gradient})` }} />
+        <div className="pie-legend">
+          {segments.map((s) => (
+            <div key={s.label} className="pie-legend-row">
+              <span className="pie-dot" style={{ background: s.color }} />
+              <span className="pie-label">{s.label}</span>
+              <strong className="pie-value">{s.value} ({s.percent}%)</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const portraitExportQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -370,9 +429,112 @@ export function AdminAnalyticsPage() {
               )}
 
               {activeModuleTab === 'card_sort' && (
-                <div className="list-row">
-                  <span>Card Sorting Submissions</span>
-                  <small>{overview.card_sort_submissions ?? 0}</small>
+                <div className="module-stack">
+                  <div className="kpi-grid compact">
+                    <article className="mini-kpi">
+                      <span>Submissions gesamt</span>
+                      <strong>{overview.card_sort_submissions ?? 0}</strong>
+                    </article>
+                    <article className="mini-kpi">
+                      <span>Aktuelle Session-Stände</span>
+                      <strong>{overview.card_sort?.latest_session_submissions ?? 0}</strong>
+                    </article>
+                    <article className="mini-kpi">
+                      <span>User-Ideen: eigene Spalten</span>
+                      <strong>{overview.card_sort?.user_idea?.custom_columns_total ?? 0}</strong>
+                    </article>
+                    <article className="mini-kpi">
+                      <span>User-Ideen: eigene Karten</span>
+                      <strong>{overview.card_sort?.user_idea?.custom_cards_total ?? 0}</strong>
+                    </article>
+                  </div>
+
+                  <div className="modules-data-grid">
+                    <section className="qa-block">
+                      <p className="qa-question">Diagramm: Zuordnungen je Spalte</p>
+                      {renderPieChart(
+                        overview.card_sort?.column_distribution || [],
+                        (row) => row.column,
+                        'Keine Card-Sorting-Daten vorhanden.'
+                      )}
+                    </section>
+
+                    <section className="qa-block">
+                      <p className="qa-question">Diagramm: Kartenhäufigkeit (Top)</p>
+                      {renderPieChart(
+                        (overview.card_sort?.card_distribution || []).slice(0, 20),
+                        (row) => row.card_label,
+                        'Keine Kartenzuordnungen vorhanden.'
+                      )}
+                    </section>
+
+                    <section className="qa-block modules-data-grid-full">
+                      <p className="qa-question">Spaltenansicht: Welche Cards wurden wohin zugeordnet?</p>
+                      {(overview.card_sort?.column_card_distribution || []).length > 0 ? (
+                        <div className="column-card-grid">
+                          {overview.card_sort.column_card_distribution.map((columnRow) => (
+                            <article key={columnRow.column} className="qa-block qa-nested">
+                              <p className="qa-question">{columnRow.column} <small>({columnRow.total})</small></p>
+                              {renderPieChart(
+                                columnRow.cards || [],
+                                (row) => row.card_label,
+                                'Keine Karten in dieser Spalte.'
+                              )}
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <p>Keine Spalten-/Kartenzuordnungen vorhanden.</p>
+                      )}
+                    </section>
+
+                    <section className="qa-block modules-data-grid-full">
+                      <p className="qa-question">Card-Ansicht: Zu welcher Spalte wurde jede Card wie oft zugeordnet?</p>
+                      {(overview.card_sort?.card_column_distribution || []).length > 0 ? (
+                        <div className="column-card-grid">
+                          {overview.card_sort.card_column_distribution.map((cardRow) => (
+                            <article key={cardRow.card_label} className="qa-block qa-nested">
+                              <p className="qa-question">{cardRow.card_label} <small>({cardRow.total})</small></p>
+                              {renderPieChart(
+                                cardRow.columns || [],
+                                (row) => row.column,
+                                'Keine Spaltenzuordnung für diese Card.'
+                              )}
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <p>Keine Card-zu-Spalten-Zuordnungen vorhanden.</p>
+                      )}
+                    </section>
+
+                    <section className="qa-block">
+                      <p className="qa-question">User-Ideen: Eigene Spalten (Diagramm)</p>
+                      {renderCountBars(
+                        overview.card_sort?.user_idea?.custom_columns_by_name || [],
+                        (row) => row.column,
+                        'Keine benutzerdefinierten Spalten vorhanden.'
+                      )}
+                    </section>
+
+                    <section className="qa-block">
+                      <p className="qa-question">User-Ideen: Eigene Cards (Top)</p>
+                      {renderCountBars(
+                        (overview.card_sort?.user_idea?.custom_cards_by_label || []).slice(0, 20),
+                        (row) => row.label,
+                        'Keine benutzerdefinierten Karten vorhanden.'
+                      )}
+                    </section>
+
+                    <section className="qa-block modules-data-grid-full">
+                      <p className="qa-question">User-Ideen: Eigene Cards je Spalte</p>
+                      {renderPieChart(
+                        overview.card_sort?.user_idea?.custom_cards_by_column || [],
+                        (row) => row.column,
+                        'Keine benutzerdefinierten Karten-Spaltenzuordnungen vorhanden.'
+                      )}
+                    </section>
+                  </div>
                 </div>
               )}
 

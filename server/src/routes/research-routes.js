@@ -52,7 +52,7 @@ router.get('/answers/session/:sessionId', async (req, res, next) => {
 
 router.post('/cardsort', async (req, res, next) => {
   try {
-    const { session_id, card_groups } = req.body;
+    const { session_id, card_groups, user_idea_category } = req.body;
     const session = await assertSessionOwnership(session_id, req.auth);
     assertWritableSession(session);
     const item = await CardSort.create({
@@ -60,6 +60,19 @@ router.post('/cardsort', async (req, res, next) => {
       user_id: session.user_id,
       study_id: session.study_id,
       card_groups,
+      user_idea_category: {
+        custom_columns: Array.isArray(user_idea_category?.custom_columns)
+          ? user_idea_category.custom_columns.map((x) => String(x || '').trim()).filter(Boolean)
+          : [],
+        custom_cards: Array.isArray(user_idea_category?.custom_cards)
+          ? user_idea_category.custom_cards
+              .map((x) => ({
+                label: String(x?.label || '').trim(),
+                column: String(x?.column || '').trim(),
+              }))
+              .filter((x) => x.label)
+          : [],
+      },
     });
     res.status(201).json(item);
   } catch (err) {

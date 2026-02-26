@@ -34,10 +34,12 @@ export function AdminPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [questionText, setQuestionText] = useState('');
   const [cardLabel, setCardLabel] = useState('');
+  const [cardSortColumnLabel, setCardSortColumnLabel] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [profileCardLabel, setProfileCardLabel] = useState('');
   const [items, setItems] = useState({ questions: [], cards: [], tasks: [] });
   const [profileCards, setProfileCards] = useState([]);
+  const [cardSortColumns, setCardSortColumns] = useState([]);
   const [studyManagementOpen, setStudyManagementOpen] = useState(true);
   const [assignmentOpen, setAssignmentOpen] = useState(true);
   const [contentConfigOpen, setContentConfigOpen] = useState(true);
@@ -76,10 +78,14 @@ export function AdminPage() {
       adminApi.listTasks(studyId),
       adminApi.listAssignments(studyId),
     ]);
-    const pCards = await adminApi.listProfileCards(studyId);
+    const [pCards, csColumns] = await Promise.all([
+      adminApi.listProfileCards(studyId),
+      adminApi.listCardSortColumns(studyId),
+    ]);
     setItems({ questions, cards, tasks });
     setAssignments(assigned || []);
     setProfileCards(pCards || []);
+    setCardSortColumns(csColumns || []);
   };
 
   useEffect(() => {
@@ -655,6 +661,66 @@ export function AdminPage() {
                     const ok = window.confirm('Card wirklich löschen?');
                     if (!ok) return;
                     await adminApi.deleteCard(c._id);
+                    await loadContent(selectedStudy);
+                  }}
+                >
+                  Löschen
+                </button>
+              </div>
+            </div>
+          ))}
+        </CardPanel>
+
+        <CardPanel title="Card-Sorting-Spalten">
+          <FormField
+            label="Spaltenname"
+            value={cardSortColumnLabel}
+            onChange={(e) => setCardSortColumnLabel(e.target.value)}
+          />
+          <button
+            className="primary-btn"
+            onClick={async () => {
+              try {
+                if (!selectedStudy) return;
+                await adminApi.createCardSortColumn(selectedStudy, { label: cardSortColumnLabel });
+                setCardSortColumnLabel('');
+                await loadContent(selectedStudy);
+                showSuccess('Spalte erfolgreich erstellt.');
+              } catch (err) {
+                showError(err.message || 'Spalte konnte nicht erstellt werden.');
+              }
+            }}
+          >
+            Spalte hinzufügen
+          </button>
+          {cardSortColumns.map((col) => (
+            <div key={col._id} className="item-row">
+              <div className="chip">{col.label}</div>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={async () => {
+                    try {
+                      const label = window.prompt('Spalte bearbeiten', col.label);
+                      if (!label || label.trim() === col.label) return;
+                      await adminApi.updateCardSortColumn(col._id, { label: label.trim() });
+                      await loadContent(selectedStudy);
+                      showSuccess('Spalte erfolgreich gespeichert.');
+                    } catch (err) {
+                      showError(err.message || 'Speichern fehlgeschlagen.');
+                    }
+                  }}
+                >
+                  Bearbeiten
+                </button>
+                <button
+                  type="button"
+                  className="danger-btn"
+                  onClick={async () => {
+                    const ok = window.confirm('Spalte wirklich löschen?');
+                    if (!ok) return;
+                    await adminApi.deleteCardSortColumn(col._id);
                     await loadContent(selectedStudy);
                   }}
                 >

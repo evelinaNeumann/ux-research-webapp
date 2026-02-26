@@ -31,6 +31,12 @@ export const adminApi = {
   updateCard: (cardId, payload) =>
     http(`/admin/cards/${cardId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteCard: (cardId) => http(`/admin/cards/${cardId}`, { method: 'DELETE' }),
+  listCardSortColumns: (studyId) => http(`/admin/studies/${studyId}/card-sort-columns`),
+  createCardSortColumn: (studyId, payload) =>
+    http(`/admin/studies/${studyId}/card-sort-columns`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateCardSortColumn: (columnId, payload) =>
+    http(`/admin/card-sort-columns/${columnId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteCardSortColumn: (columnId) => http(`/admin/card-sort-columns/${columnId}`, { method: 'DELETE' }),
   listTasks: (studyId) => http(`/admin/studies/${studyId}/tasks`),
   createTask: (studyId, payload) =>
     http(`/admin/studies/${studyId}/tasks`, { method: 'POST', body: JSON.stringify(payload) }),
