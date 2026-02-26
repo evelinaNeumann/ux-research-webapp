@@ -9,6 +9,11 @@ export function AdminAnalyticsPage() {
   const [selectedStudy, setSelectedStudy] = useState('');
   const [overview, setOverview] = useState(null);
   const [chart, setChart] = useState(null);
+  const [portraits, setPortraits] = useState(null);
+  const [portraitFilters, setPortraitFilters] = useState({ age: '', role: '', keyword: '' });
+  const [profileInsightsOpen, setProfileInsightsOpen] = useState(true);
+  const [modulesOpen, setModulesOpen] = useState(true);
+  const [activeModuleTab, setActiveModuleTab] = useState('questionnaire');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -27,23 +32,131 @@ export function AdminAnalyticsPage() {
     (async () => {
       if (!selectedStudy) return;
       try {
-        const [o, c] = await Promise.all([
-          analyticsApi.studyOverview(selectedStudy),
-          analyticsApi.studyChart(selectedStudy),
+        const filterPayload = {
+          age: portraitFilters.age,
+          role: portraitFilters.role,
+          keyword: portraitFilters.keyword,
+        };
+        const [o, c, p] = await Promise.all([
+          analyticsApi.studyOverview(selectedStudy, filterPayload),
+          analyticsApi.studyChart(selectedStudy, filterPayload),
+          analyticsApi.studyUserPortraits(selectedStudy),
         ]);
         setOverview(o);
         setChart(c);
+        setPortraits(p);
         setError('');
       } catch (err) {
         setError(err.message);
       }
     })();
-  }, [selectedStudy]);
+  }, [selectedStudy, portraitFilters.age, portraitFilters.role, portraitFilters.keyword]);
 
   const selectedStudyName = useMemo(
     () => studies.find((s) => s._id === selectedStudy)?.name || 'Keine Studie',
     [studies, selectedStudy]
   );
+
+  const roleKey = (roleCategory, roleCustom) => {
+    if (roleCategory === 'other') return `other:${roleCustom || 'ohne Angabe'}`;
+    return roleCategory || '';
+  };
+
+  const roleLabel = (roleCategory, roleCustom) => {
+    if (String(roleCategory || '').startsWith('other:')) {
+      const custom = String(roleCategory).slice('other:'.length);
+      return custom ? `Eigene Rolle: ${custom}` : 'Eigene Rolle';
+    }
+    if (roleCategory === 'schueler_azubi_student') return 'Schüler/Azubi/Student';
+    if (roleCategory === 'angestellter_fachabteilung') return 'Angestellter aus Fachabteilung';
+    if (roleCategory === 'leitende_position') return 'Leitende Position';
+    if (roleCategory === 'other') return roleCustom ? `Eigene Rolle: ${roleCustom}` : 'Eigene Rolle';
+    return roleCategory || '-';
+  };
+
+  const ageOptions = useMemo(() => {
+    const list = portraits?.items?.map((x) => x.age_range).filter(Boolean) || [];
+    return [...new Set(list)];
+  }, [portraits]);
+
+  const roleOptions = useMemo(() => {
+    const list =
+      portraits?.items?.map((x) => roleKey(x.role_category, x.role_custom)).filter(Boolean) || [];
+    return [...new Set(list)];
+  }, [portraits]);
+
+  const keywordOptions = useMemo(() => {
+    const list = (portraits?.items || []).flatMap((x) => x.key_points || []);
+    return [...new Set(list)].sort((a, b) => String(a).localeCompare(String(b)));
+  }, [portraits]);
+
+  const filteredPortraitItems = useMemo(() => {
+    const items = portraits?.items || [];
+    return items.filter((x) => {
+      const byAge = portraitFilters.age ? x.age_range === portraitFilters.age : true;
+      const byRole = portraitFilters.role
+        ? roleKey(x.role_category, x.role_custom) === portraitFilters.role
+        : true;
+      const byKeyword = portraitFilters.keyword
+        ? (x.key_points || []).includes(portraitFilters.keyword)
+        : true;
+      return byAge && byRole && byKeyword;
+    });
+  }, [portraits, portraitFilters]);
+
+  const filteredAggregates = useMemo(() => {
+    const ageMap = {};
+    const roleMap = {};
+    const keywordMap = {};
+    for (const p of filteredPortraitItems) {
+      if (p.age_range) ageMap[p.age_range] = (ageMap[p.age_range] || 0) + 1;
+      const rk = roleKey(p.role_category, p.role_custom);
+      if (rk) roleMap[rk] = (roleMap[rk] || 0) + 1;
+      for (const word of p.key_points || []) {
+        keywordMap[word] = (keywordMap[word] || 0) + 1;
+      }
+    }
+    const toRows = (obj) =>
+      Object.entries(obj)
+        .map(([key, count]) => ({ key, count }))
+        .sort((a, b) => b.count - a.count || String(a.key).localeCompare(String(b.key)));
+    return {
+      age_ranges: toRows(ageMap),
+      roles: toRows(roleMap),
+      key_points: toRows(keywordMap),
+    };
+  }, [filteredPortraitItems]);
+
+  const filteredProfileCount = filteredPortraitItems.length;
+  const renderDistributionBars = (rows, labelFn) => {
+    if (!rows?.length) return <p>Keine Daten für den gewählten Filter.</p>;
+    const max = Math.max(...rows.map((r) => r.count), 1);
+    return (
+      <div className="dist-wrap">
+        {rows.map((row) => {
+          const width = Math.round((row.count / max) * 100);
+          const percent = filteredProfileCount > 0 ? Math.round((row.count / filteredProfileCount) * 100) : 0;
+          return (
+            <div key={row.key} className="dist-row">
+              <span className="dist-label">{labelFn(row.key)}</span>
+              <div className="bar-track">
+                <div className="bar-fill" style={{ width: `${width}%` }} />
+              </div>
+              <strong className="dist-value">{row.count} ({percent}%)</strong>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const portraitExportQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (portraitFilters.age) params.set('age', portraitFilters.age);
+    if (portraitFilters.role) params.set('role', portraitFilters.role);
+    if (portraitFilters.keyword) params.set('keyword', portraitFilters.keyword);
+    return params.toString();
+  }, [portraitFilters]);
 
   return (
     <div className="analytics-shell">
@@ -111,25 +224,250 @@ export function AdminAnalyticsPage() {
         </CardPanel>
       )}
 
-      {overview?.questionnaire?.length > 0 && (
-        <CardPanel title="Interview Aggregation">
-          {overview.questionnaire.map((q) => (
-            <div key={q._id} className="list-row">
-              <span>{String(q._id)}</span>
-              <small>avg: {Number(q.avg || 0).toFixed(2)} • n: {q.n}</small>
-            </div>
-          ))}
+      {portraits && (
+        <CardPanel title="Filter (Profile und Studienmodule)">
+          <div className="analytics-toolbar">
+            <p className="hint">Filter wirken auf User Portraits, Profil-Daten Auswertung und Studienmodule.</p>
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => setPortraitFilters({ age: '', role: '', keyword: '' })}
+            >
+              Filter zurücksetzen
+            </button>
+          </div>
+          <div className="profile-filter-grid">
+            <label className="form-field">
+              <span>Alter</span>
+              <select
+                value={portraitFilters.age}
+                onChange={(e) => setPortraitFilters((prev) => ({ ...prev, age: e.target.value }))}
+              >
+                <option value="">Alle</option>
+                {ageOptions.map((age) => (
+                  <option key={age} value={age}>{age}</option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Rolle</span>
+              <select
+                value={portraitFilters.role}
+                onChange={(e) => setPortraitFilters((prev) => ({ ...prev, role: e.target.value }))}
+              >
+                <option value="">Alle</option>
+                {roleOptions.map((role) => (
+                  <option key={role} value={role}>{roleLabel(role, '')}</option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Wichtiges Wort</span>
+              <select
+                value={portraitFilters.keyword}
+                onChange={(e) => setPortraitFilters((prev) => ({ ...prev, keyword: e.target.value }))}
+              >
+                <option value="">Alle</option>
+                {keywordOptions.map((keyword) => (
+                  <option key={keyword} value={keyword}>{keyword}</option>
+                ))}
+              </select>
+            </label>
+          </div>
         </CardPanel>
       )}
 
-      {overview?.image_rating?.length > 0 && (
-        <CardPanel title="Bildbewertung Aggregation">
-          {overview.image_rating.map((i) => (
-            <div key={i._id} className="list-row">
-              <span>{String(i._id)}</span>
-              <small>avg: {Number(i.avg || 0).toFixed(2)} • n: {i.n}</small>
-            </div>
-          ))}
+      {overview && (
+        <CardPanel title="Studienmodule">
+          <div className="analytics-collapse-header">
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => setModulesOpen((v) => !v)}
+            >
+              {modulesOpen ? 'Zuklappen' : 'Aufklappen'}
+            </button>
+          </div>
+          {modulesOpen && (
+            <>
+              <div className="modules-top-row">
+                <div className="module-tabs">
+                  <button
+                    type="button"
+                    className={activeModuleTab === 'questionnaire' ? 'tab-btn active' : 'tab-btn'}
+                    onClick={() => setActiveModuleTab('questionnaire')}
+                  >
+                    Interview
+                  </button>
+                  <button
+                    type="button"
+                    className={activeModuleTab === 'card_sort' ? 'tab-btn active' : 'tab-btn'}
+                    onClick={() => setActiveModuleTab('card_sort')}
+                  >
+                    Card Sorting
+                  </button>
+                  <button
+                    type="button"
+                    className={activeModuleTab === 'image_rating' ? 'tab-btn active' : 'tab-btn'}
+                    onClick={() => setActiveModuleTab('image_rating')}
+                  >
+                    Bildauswertung
+                  </button>
+                </div>
+                <div className="analytics-actions">
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={() =>
+                      window.open(
+                        `http://localhost:4000/analytics/study/${selectedStudy}/modules/export?format=pdf${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
+                        '_blank'
+                      )
+                    }
+                  >
+                    Studienmodule PDF Export
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={() =>
+                      window.open(
+                        `http://localhost:4000/analytics/study/${selectedStudy}/modules/export?format=json${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
+                        '_blank'
+                      )
+                    }
+                  >
+                    Studienmodule JSON Export
+                  </button>
+                </div>
+              </div>
+
+              {activeModuleTab === 'questionnaire' && (
+                <div>
+                  {overview.questionnaire?.length > 0 ? (
+                    overview.questionnaire.map((q) => (
+                      <div key={q._id} className="qa-block">
+                        <p className="qa-question">{q.question_text || String(q._id)}</p>
+                        <small>Antworten gesamt: {q.n ?? 0}</small>
+                        {(q.answers || []).length > 0 ? (
+                          <div className="qa-answer-list">
+                            {q.answers.map((answer, idx) => (
+                              <div key={`${q._id}-${idx}`} className="list-row">
+                                <span>{answer}</span>
+                                <small>#{idx + 1}</small>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p>Keine Antworten vorhanden.</p>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <p>Keine Interview-Daten vorhanden.</p>
+                  )}
+                </div>
+              )}
+
+              {activeModuleTab === 'card_sort' && (
+                <div className="list-row">
+                  <span>Card Sorting Submissions</span>
+                  <small>{overview.card_sort_submissions ?? 0}</small>
+                </div>
+              )}
+
+              {activeModuleTab === 'image_rating' && (
+                <div>
+                  {overview.image_rating?.length > 0 ? (
+                    overview.image_rating.map((i) => (
+                      <div key={i._id} className="list-row">
+                        <span>{String(i._id)}</span>
+                        <small>avg: {Number(i.avg || 0).toFixed(2)} • n: {i.n}</small>
+                      </div>
+                    ))
+                  ) : (
+                    <p>Keine Bildauswertungs-Daten vorhanden.</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </CardPanel>
+      )}
+
+      {portraits && (
+        <CardPanel title="User Portraits und Profil-Daten Auswertung">
+          <div className="analytics-collapse-header">
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => setProfileInsightsOpen((v) => !v)}
+            >
+              {profileInsightsOpen ? 'Zuklappen' : 'Aufklappen'}
+            </button>
+          </div>
+          {profileInsightsOpen && (
+            <>
+              <div className="analytics-toolbar">
+                <p className="hint">Profile in dieser Studie: <strong>{portraits.total_profiles || 0}</strong></p>
+                <div className="analytics-actions">
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={() =>
+                      window.open(
+                        `http://localhost:4000/analytics/study/${selectedStudy}/user-portraits/export?format=pdf${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
+                        '_blank'
+                      )
+                    }
+                  >
+                    Portrait PDF Export
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={() =>
+                      window.open(
+                        `http://localhost:4000/analytics/study/${selectedStudy}/user-portraits/export?format=json${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
+                        '_blank'
+                      )
+                    }
+                  >
+                    Portrait JSON Export
+                  </button>
+                </div>
+              </div>
+              {filteredPortraitItems.length === 0 && <p>Keine Profildaten für den gewählten Filter.</p>}
+              <div className="portrait-grid">
+                {filteredPortraitItems.map((u) => (
+                  <article key={`${u.user_id || u.username}`} className="portrait-card">
+                    <h4>{u.username}</h4>
+                    <small>Alter: {u.age_range || '-'}</small>
+                    <small>Rolle: {roleLabel(u.role_category, u.role_custom)}</small>
+                    <div className="tag-wrap">
+                      {(u.key_points || []).map((point) => (
+                        <span key={point} className="tag-chip">{point}</span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="profile-agg-grid">
+                <div>
+                  <h4>Alter (Verteilung)</h4>
+                  {renderDistributionBars(filteredAggregates.age_ranges || [], (key) => key)}
+                </div>
+                <div>
+                  <h4>Rollen (Verteilung)</h4>
+                  {renderDistributionBars(filteredAggregates.roles || [], (key) => roleLabel(key, ''))}
+                </div>
+                <div>
+                  <h4>Wichtige Wörter (Top)</h4>
+                  {renderDistributionBars(filteredAggregates.key_points || [], (key) => key)}
+                </div>
+              </div>
+            </>
+          )}
         </CardPanel>
       )}
     </div>

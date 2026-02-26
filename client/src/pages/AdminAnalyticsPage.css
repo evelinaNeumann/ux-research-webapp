@@ -16,6 +16,67 @@
   gap: 0.5rem;
 }
 
+.analytics-collapse-header {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modules-toolbar {
+  justify-content: flex-end;
+}
+
+.modules-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.modules-collapse-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.45rem;
+}
+
+.module-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  border: 1px solid #d8dce7;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.45rem 0.65rem;
+}
+
+.tab-btn.active {
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.qa-block {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.65rem;
+  margin-top: 0.6rem;
+}
+
+.qa-question {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.qa-answer-list {
+  margin-top: 0.45rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -62,4 +123,78 @@
 .hint {
   margin: 0.5rem 0 0;
   color: #4b5563;
+}
+
+.portrait-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.portrait-card {
+  border: 1px solid #e6ebf3;
+  border-radius: 12px;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.portrait-card h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.tag-wrap {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+}
+
+.tag-chip {
+  border: 1px solid #dbe7ff;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1e40af;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+.profile-agg-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.profile-agg-grid h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.profile-filter-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.dist-wrap {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dist-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 170px) 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dist-label {
+  color: #334155;
+  font-size: 0.85rem;
+}
+
+.dist-value {
+  font-size: 0.82rem;
+  color: #0f172a;
 }
