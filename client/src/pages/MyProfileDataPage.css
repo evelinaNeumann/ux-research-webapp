@@ -1,0 +1,21 @@
+.profile-data-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.profile-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.7rem;
+}
+
+.profile-row small {
+  display: block;
+  color: #6b7280;
+  margin-top: 0.2rem;
+}
+
+.hint {
+  margin: 0;
+  color: #6b7280;
+}

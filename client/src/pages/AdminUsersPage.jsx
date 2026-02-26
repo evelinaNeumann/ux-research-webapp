@@ -5,6 +5,8 @@ import './AdminUsersPage.css';
 
 export function AdminUsersPage() {
   const [users, setUsers] = useState([]);
+  const [profilesByUser, setProfilesByUser] = useState({});
+  const [openUserId, setOpenUserId] = useState('');
   const [error, setError] = useState('');
 
   const loadUsers = async () => {
@@ -21,41 +23,113 @@ export function AdminUsersPage() {
     loadUsers();
   }, []);
 
+  const loadProfiles = async (userId) => {
+    const items = await adminApi.listUserProfiles(userId);
+    setProfilesByUser((prev) => ({ ...prev, [userId]: items || [] }));
+  };
+
   return (
     <div className="admin-users-shell">
       <CardPanel title="Benutzer & Rollen">
         {error && <p className="error-text">{error}</p>}
         {users.map((u) => (
-          <div key={u._id} className="row-item">
-            <div>
-              <strong>{u.username}</strong>
-              <small>{u.role}</small>
+          <div key={u._id} className="user-block">
+            <div className="row-item">
+              <div>
+                <strong>{u.username}</strong>
+                <small>{u.role}</small>
+              </div>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={async () => {
+                    if (openUserId === u._id) {
+                      setOpenUserId('');
+                      return;
+                    }
+                    await loadProfiles(u._id);
+                    setOpenUserId(u._id);
+                  }}
+                >
+                  {openUserId === u._id ? 'Profile ausblenden' : 'Profile anzeigen'}
+                </button>
+                <select
+                  value={u.role}
+                  onChange={async (e) => {
+                    const role = e.target.value;
+                    await adminApi.setUserRole(u._id, role);
+                    await loadUsers();
+                  }}
+                >
+                  <option value="user">user</option>
+                  <option value="admin">admin</option>
+                </select>
+                <button
+                  type="button"
+                  className="danger-btn"
+                  onClick={async () => {
+                    const ok = window.confirm(`Nutzer ${u.username} wirklich löschen?`);
+                    if (!ok) return;
+                    await adminApi.deleteUser(u._id);
+                    await loadUsers();
+                  }}
+                >
+                  Löschen
+                </button>
+              </div>
             </div>
-            <div className="row-actions">
-              <select
-                value={u.role}
-                onChange={async (e) => {
-                  const role = e.target.value;
-                  await adminApi.setUserRole(u._id, role);
-                  await loadUsers();
-                }}
-              >
-                <option value="user">user</option>
-                <option value="admin">admin</option>
-              </select>
-              <button
-                type="button"
-                className="danger-btn"
-                onClick={async () => {
-                  const ok = window.confirm(`Nutzer ${u.username} wirklich löschen?`);
-                  if (!ok) return;
-                  await adminApi.deleteUser(u._id);
-                  await loadUsers();
-                }}
-              >
-                Löschen
-              </button>
-            </div>
+
+            {openUserId === u._id && (
+              <div className="profiles-box">
+                {(profilesByUser[u._id] || []).length === 0 && <small>Keine Profilangaben gespeichert.</small>}
+                {(profilesByUser[u._id] || []).map((p) => (
+                  <div key={p._id} className="profile-row">
+                    <div>
+                      <strong>{p.study_id?.name || 'Studie'}</strong>
+                      <small>Alter: {p.age_range}</small>
+                      <small>Rolle: {p.role_category}{p.role_custom ? ` (${p.role_custom})` : ''}</small>
+                      <small>Wichtige Wörter: {(p.key_points || []).join(', ')}</small>
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={async () => {
+                        try {
+                          const age_range = window.prompt('Alter-Range', p.age_range) || p.age_range;
+                          const role_category = window.prompt(
+                            'Rolle (schueler_azubi_student | angestellter_fachabteilung | leitende_position | other)',
+                            p.role_category
+                          ) || p.role_category;
+                          const role_custom = window.prompt('Eigene Rolle (nur bei other)', p.role_custom || '') || p.role_custom || '';
+                          const keyPointsRaw = window.prompt(
+                            '4 wichtige Wörter (kommagetrennt)',
+                            (p.key_points || []).join(', ')
+                          ) || (p.key_points || []).join(', ');
+                          const key_points = keyPointsRaw
+                            .split(',')
+                            .map((x) => x.trim())
+                            .filter(Boolean)
+                            .slice(0, 4);
+
+                          await adminApi.updateUserProfile(u._id, p.study_id?._id || p.study_id, {
+                            age_range,
+                            role_category,
+                            role_custom,
+                            key_points,
+                          });
+                          await loadProfiles(u._id);
+                        } catch (err) {
+                          setError(err.message);
+                        }
+                      }}
+                    >
+                      Profil bearbeiten
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </CardPanel>

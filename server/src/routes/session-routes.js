@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { Session } from '../models/Session.js';
 import { Study } from '../models/Study.js';
 import { StudyAssignment } from '../models/StudyAssignment.js';
+import { UserStudyProfile } from '../models/UserStudyProfile.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, forbidden, badRequest } from '../utils/errors.js';
 
@@ -23,10 +24,21 @@ router.post('/', async (req, res, next) => {
         is_active: true,
       });
       if (!assignment) throw forbidden('study not assigned to user');
+
+      const profile = await UserStudyProfile.findOne({
+        study_id,
+        user_id: req.auth.sub,
+      });
+      if (!profile) throw badRequest('profile setup required');
     }
 
     const existing = await Session.findOne({ user_id: req.auth.sub, study_id, status: 'in_progress' }).sort({ createdAt: -1 });
     if (existing) return res.status(200).json(existing);
+
+    if (req.auth.role !== 'admin') {
+      const doneSession = await Session.findOne({ user_id: req.auth.sub, study_id, status: 'done' }).sort({ completed_at: -1 });
+      if (doneSession) throw forbidden('study already completed');
+    }
 
     const item = await Session.create({
       user_id: req.auth.sub,

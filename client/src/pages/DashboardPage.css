@@ -16,3 +16,8 @@
   display: block;
   color: #6b7280;
 }
+
+.hint {
+  margin: 0 0 0.6rem;
+  color: #6b7280;
+}

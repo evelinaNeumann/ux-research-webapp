@@ -16,10 +16,17 @@ async function assertSessionOwnership(sessionId, auth) {
   return session;
 }
 
+function assertWritableSession(session) {
+  if (session.status === 'done') {
+    throw forbidden('session is completed and read-only');
+  }
+}
+
 router.post('/answers', async (req, res, next) => {
   try {
     const { session_id, question_id, response } = req.body;
     const session = await assertSessionOwnership(session_id, req.auth);
+    assertWritableSession(session);
     const item = await Answer.create({
       session_id,
       user_id: session.user_id,
@@ -47,6 +54,7 @@ router.post('/cardsort', async (req, res, next) => {
   try {
     const { session_id, card_groups } = req.body;
     const session = await assertSessionOwnership(session_id, req.auth);
+    assertWritableSession(session);
     const item = await CardSort.create({
       session_id,
       user_id: session.user_id,
@@ -73,6 +81,7 @@ router.post('/image-rating', async (req, res, next) => {
   try {
     const { session_id, image_id, rating, feedback, recall_answer } = req.body;
     const session = await assertSessionOwnership(session_id, req.auth);
+    assertWritableSession(session);
     const item = await ImageRating.create({
       session_id,
       user_id: session.user_id,

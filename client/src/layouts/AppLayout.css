@@ -38,6 +38,21 @@
   padding: 1.2rem;
 }
 
+.layout-topbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.8rem;
+}
+
+.login-info {
+  font-size: 0.9rem;
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e3e6ef;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+}
+
 .ghost-btn {
   border: 1px solid #d5dbea;
   background: #fff;

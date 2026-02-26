@@ -21,7 +21,7 @@ export function UserDataPage() {
 
   return (
     <div className="user-data-grid">
-      <CardPanel title="Meine User Data">
+      <CardPanel title="Passwort ändern">
         <p className="hint">Hier kannst du dein Passwort ändern.</p>
 
         <label className="password-field">

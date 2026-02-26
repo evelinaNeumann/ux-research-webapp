@@ -10,6 +10,7 @@ import sessionRoutes from './routes/session-routes.js';
 import researchRoutes from './routes/research-routes.js';
 import analyticsRoutes from './routes/analytics-routes.js';
 import adminContentRoutes from './routes/admin-content-routes.js';
+import profileRoutes from './routes/profile-routes.js';
 import { errorHandler } from './middleware/error-handler.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -37,5 +38,6 @@ app.use('/sessions', sessionRoutes);
 app.use('/', researchRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/admin', adminContentRoutes);
+app.use('/profiles', profileRoutes);
 
 app.use(errorHandler);

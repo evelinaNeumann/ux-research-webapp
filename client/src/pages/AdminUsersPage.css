@@ -3,6 +3,11 @@
   gap: 1rem;
 }
 
+.user-block {
+  display: grid;
+  gap: 0.6rem;
+}
+
 .row-item {
   display: flex;
   justify-content: space-between;
@@ -35,4 +40,32 @@
   color: #b91c1c;
   border-radius: 8px;
   padding: 0.35rem 0.6rem;
+}
+
+.profiles-box {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.6rem;
+  background: #fafbff;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.profile-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.8rem;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+}
+
+.profile-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.profile-row small {
+  display: block;
+  color: #6b7280;
 }

@@ -43,6 +43,7 @@ GET /studies/:id
 GET /studies/:id/questions
 GET /studies/:id/cards
 GET /studies/:id/images
+GET /studies/:id/profile-cards
 POST /studies (Admin)
 PUT /studies/:id (Admin)
 DELETE /studies/:id (Admin)
@@ -88,6 +89,8 @@ POST /admin/studies/:studyId/content/rollback
 
 ### User Role Management
 GET /admin/users
+GET /admin/users/:userId/profiles
+PUT /admin/users/:userId/profiles/:studyId
 PUT /admin/users/:userId/role
 DELETE /admin/users/:userId
 
@@ -96,13 +99,28 @@ GET /admin/studies/:studyId/assignments
 POST /admin/studies/:studyId/assignments
 DELETE /admin/studies/:studyId/assignments/:userId
 
+### Study Profile Cards
+GET /admin/studies/:studyId/profile-cards
+POST /admin/studies/:studyId/profile-cards
+PUT /admin/profile-cards/:cardId
+DELETE /admin/profile-cards/:cardId
+
 ---
 
 ## Sessions
 
-POST /sessions
+POST /sessions (User nur nach abgeschlossenem Study-Profil)
 GET /sessions/:id
 PUT /sessions/:id/complete
+
+---
+
+## User Study Profile
+
+GET /profiles/options
+GET /profiles/me
+GET /profiles/study/:studyId
+PUT /profiles/study/:studyId
 
 ---
 

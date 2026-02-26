@@ -6,6 +6,12 @@ import { studyApi } from '../api/studies';
 import { researchApi } from '../api/research';
 import './SessionPage.css';
 
+const MODULE_LABELS = {
+  questionnaire: 'Interview',
+  card_sort: 'Card Sorting',
+  image_rating: 'Bildbewertung',
+};
+
 export function SessionPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -37,6 +43,36 @@ export function SessionPage() {
         setCards(c || []);
         setImages(i || []);
 
+        const [savedAnswers, savedCardSort, savedRatings] = await Promise.all([
+          researchApi.getAnswersBySession(s._id),
+          researchApi.getCardSortBySession(s._id),
+          researchApi.getImageRatingsBySession(s._id),
+        ]);
+
+        const answerMap = {};
+        for (const a of (savedAnswers || [])) {
+          answerMap[a.question_id] = a.response;
+        }
+        setQuestionAnswers(answerMap);
+
+        const selected = {};
+        if (savedCardSort?.card_groups?.length) {
+          for (const id of (savedCardSort.card_groups[0]?.card_ids || [])) {
+            selected[id] = true;
+          }
+        }
+        setSelectedCards(selected);
+
+        const ratingsMap = {};
+        for (const r of (savedRatings || [])) {
+          ratingsMap[r.image_id] = {
+            rating: String(r.rating ?? ''),
+            feedback: r.feedback || '',
+            recall: r.recall_answer || '',
+          };
+        }
+        setImageInputs(ratingsMap);
+
         if (st.module_order?.[0]) setActiveModule(st.module_order[0]);
       } catch (err) {
         setMessage(err.message);
@@ -57,7 +93,7 @@ export function SessionPage() {
           });
         }
       }
-      setMessage('Fragebogen gespeichert.');
+      setMessage('Interview gespeichert.');
     } catch (err) {
       setMessage(err.message);
     }
@@ -111,6 +147,7 @@ export function SessionPage() {
   };
 
   if (!session || !study) return <div className="splash">Session wird geladen...</div>;
+  const isReadOnly = session.status === 'done';
 
   const modules = study.module_order?.length ? study.module_order : ['questionnaire', 'card_sort', 'image_rating'];
 
@@ -125,7 +162,7 @@ export function SessionPage() {
               className={m === activeModule ? 'tab active' : 'tab'}
               onClick={() => setActiveModule(m)}
             >
-              {m}
+              {MODULE_LABELS[m] || m}
             </button>
           ))}
         </div>
@@ -133,23 +170,24 @@ export function SessionPage() {
       </CardPanel>
 
       {activeModule === 'questionnaire' && (
-        <CardPanel title="Fragebogen bearbeiten">
+        <CardPanel title={isReadOnly ? 'Interview ansehen' : 'Interview bearbeiten'}>
           {questions.length === 0 && <p>Keine Fragen vorhanden.</p>}
           {questions.map((q) => (
             <label className="form-row" key={q._id}>
               <span>{q.text}</span>
               <input
                 value={questionAnswers[q._id] || ''}
+                disabled={isReadOnly}
                 onChange={(e) => setQuestionAnswers({ ...questionAnswers, [q._id]: e.target.value })}
               />
             </label>
           ))}
-          <button className="primary-btn" onClick={saveQuestionnaire}>Fragebogen speichern</button>
+          {!isReadOnly && <button className="primary-btn" onClick={saveQuestionnaire}>Interview speichern</button>}
         </CardPanel>
       )}
 
       {activeModule === 'card_sort' && (
-        <CardPanel title="Card Sorting bearbeiten">
+        <CardPanel title={isReadOnly ? 'Card Sorting ansehen' : 'Card Sorting bearbeiten'}>
           {cards.length === 0 && <p>Keine Cards vorhanden.</p>}
           <div className="check-list">
             {cards.map((c) => (
@@ -157,18 +195,19 @@ export function SessionPage() {
                 <input
                   type="checkbox"
                   checked={!!selectedCards[c._id]}
+                  disabled={isReadOnly}
                   onChange={(e) => setSelectedCards({ ...selectedCards, [c._id]: e.target.checked })}
                 />
                 <span>{c.label}</span>
               </label>
             ))}
           </div>
-          <button className="primary-btn" onClick={saveCardSort}>Card Sorting speichern</button>
+          {!isReadOnly && <button className="primary-btn" onClick={saveCardSort}>Card Sorting speichern</button>}
         </CardPanel>
       )}
 
       {activeModule === 'image_rating' && (
-        <CardPanel title="Bildbewertung bearbeiten">
+        <CardPanel title={isReadOnly ? 'Bildbewertung ansehen' : 'Bildbewertung bearbeiten'}>
           {images.length === 0 && <p>Keine Bilder vorhanden.</p>}
           {images.map((img) => (
             <div className="image-row" key={img._id}>
@@ -184,6 +223,7 @@ export function SessionPage() {
                     min="1"
                     max="5"
                     value={imageInputs[img._id]?.rating || ''}
+                    disabled={isReadOnly}
                     onChange={(e) =>
                       setImageInputs({
                         ...imageInputs,
@@ -196,6 +236,7 @@ export function SessionPage() {
                   <span>Feedback</span>
                   <input
                     value={imageInputs[img._id]?.feedback || ''}
+                    disabled={isReadOnly}
                     onChange={(e) =>
                       setImageInputs({
                         ...imageInputs,
@@ -207,13 +248,15 @@ export function SessionPage() {
               </div>
             </div>
           ))}
-          <button className="primary-btn" onClick={saveImageRatings}>Bildbewertungen speichern</button>
+          {!isReadOnly && <button className="primary-btn" onClick={saveImageRatings}>Bildbewertungen speichern</button>}
         </CardPanel>
       )}
 
-      <CardPanel title="Session Abschluss">
-        <button className="primary-btn" onClick={completeSession}>Session abschließen</button>
-      </CardPanel>
+      {!isReadOnly && (
+        <CardPanel title="Session Abschluss">
+          <button className="primary-btn" onClick={completeSession}>Session abschließen</button>
+        </CardPanel>
+      )}
     </div>
   );
 }

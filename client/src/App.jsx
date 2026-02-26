@@ -7,6 +7,9 @@ import { AdminPage } from './pages/AdminPage';
 import { UserDataPage } from './pages/UserDataPage';
 import { SessionPage } from './pages/SessionPage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
+import { AdminAnalyticsPage } from './pages/AdminAnalyticsPage';
+import { ProfileSetupPage } from './pages/ProfileSetupPage';
+import { MyProfileDataPage } from './pages/MyProfileDataPage';
 
 function Protected({ user, children }) {
   if (!user) return <Navigate to="/login" replace />;
@@ -32,14 +35,24 @@ export function App({ user, setUser }) {
           </Protected>
         }
       >
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/" element={<DashboardPage user={user} />} />
         <Route path="/session/:sessionId" element={<SessionPage />} />
+        <Route path="/profile-setup/:studyId" element={<ProfileSetupPage />} />
+        <Route path="/my-profile-data" element={<MyProfileDataPage />} />
         <Route path="/user-data" element={<UserDataPage />} />
         <Route
           path="/admin/users"
           element={
             <AdminOnly user={user}>
               <AdminUsersPage />
+            </AdminOnly>
+          }
+        />
+        <Route
+          path="/admin/analytics"
+          element={
+            <AdminOnly user={user}>
+              <AdminAnalyticsPage />
             </AdminOnly>
           }
         />

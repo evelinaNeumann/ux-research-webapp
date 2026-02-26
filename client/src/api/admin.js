@@ -2,6 +2,9 @@ import { http } from './http';
 
 export const adminApi = {
   listUsers: () => http('/admin/users'),
+  listUserProfiles: (userId) => http(`/admin/users/${userId}/profiles`),
+  updateUserProfile: (userId, studyId, payload) =>
+    http(`/admin/users/${userId}/profiles/${studyId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   setUserRole: (userId, role) =>
     http(`/admin/users/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
   deleteUser: (userId) => http(`/admin/users/${userId}`, { method: 'DELETE' }),
@@ -10,6 +13,12 @@ export const adminApi = {
     http(`/admin/studies/${studyId}/assignments`, { method: 'POST', body: JSON.stringify({ user_id }) }),
   removeAssignment: (studyId, userId) =>
     http(`/admin/studies/${studyId}/assignments/${userId}`, { method: 'DELETE' }),
+  listProfileCards: (studyId) => http(`/admin/studies/${studyId}/profile-cards`),
+  createProfileCard: (studyId, payload) =>
+    http(`/admin/studies/${studyId}/profile-cards`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateProfileCard: (cardId, payload) =>
+    http(`/admin/profile-cards/${cardId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteProfileCard: (cardId) => http(`/admin/profile-cards/${cardId}`, { method: 'DELETE' }),
   listQuestions: (studyId) => http(`/admin/studies/${studyId}/questions`),
   createQuestion: (studyId, payload) =>
     http(`/admin/studies/${studyId}/questions`, { method: 'POST', body: JSON.stringify(payload) }),

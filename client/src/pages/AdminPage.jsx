@@ -15,7 +15,9 @@ export function AdminPage() {
   const [questionText, setQuestionText] = useState('');
   const [cardLabel, setCardLabel] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
+  const [profileCardLabel, setProfileCardLabel] = useState('');
   const [items, setItems] = useState({ questions: [], cards: [], tasks: [] });
+  const [profileCards, setProfileCards] = useState([]);
   const [assignmentOpen, setAssignmentOpen] = useState(true);
 
   useEffect(() => {
@@ -40,8 +42,10 @@ export function AdminPage() {
       adminApi.listTasks(studyId),
       adminApi.listAssignments(studyId),
     ]);
+    const pCards = await adminApi.listProfileCards(studyId);
     setItems({ questions, cards, tasks });
     setAssignments(assigned || []);
+    setProfileCards(pCards || []);
   };
 
   useEffect(() => {
@@ -83,7 +87,7 @@ export function AdminPage() {
               onChange={(e) => setStudyForm({ ...studyForm, type: e.target.value })}
             >
               <option value="mixed">mixed</option>
-              <option value="questionnaire">questionnaire</option>
+              <option value="questionnaire">Interview</option>
               <option value="card_sort">card_sort</option>
               <option value="image_rating">image_rating</option>
             </select>
@@ -282,6 +286,57 @@ export function AdminPage() {
                     const ok = window.confirm('Aufgabe wirklich löschen?');
                     if (!ok) return;
                     await adminApi.deleteTask(t._id);
+                    await loadContent(selectedStudy);
+                  }}
+                >
+                  Löschen
+                </button>
+              </div>
+            </div>
+          ))}
+        </CardPanel>
+
+        <CardPanel title="Profil-Card-Wörter (max. 8)">
+          <FormField
+            label="Profil-Wort"
+            value={profileCardLabel}
+            onChange={(e) => setProfileCardLabel(e.target.value)}
+          />
+          <button
+            className="primary-btn"
+            onClick={async () => {
+              if (!selectedStudy) return;
+              await adminApi.createProfileCard(selectedStudy, { label: profileCardLabel });
+              setProfileCardLabel('');
+              await loadContent(selectedStudy);
+            }}
+          >
+            Profil-Wort hinzufügen
+          </button>
+          <small>{profileCards.length}/8 angelegt</small>
+          {profileCards.map((p) => (
+            <div key={p._id} className="item-row">
+              <div className="chip">{p.label}</div>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={async () => {
+                    const label = window.prompt('Profil-Wort bearbeiten', p.label);
+                    if (!label || label.trim() === p.label) return;
+                    await adminApi.updateProfileCard(p._id, { label: label.trim() });
+                    await loadContent(selectedStudy);
+                  }}
+                >
+                  Bearbeiten
+                </button>
+                <button
+                  type="button"
+                  className="danger-btn"
+                  onClick={async () => {
+                    const ok = window.confirm('Profil-Wort wirklich löschen?');
+                    if (!ok) return;
+                    await adminApi.deleteProfileCard(p._id);
                     await loadContent(selectedStudy);
                   }}
                 >

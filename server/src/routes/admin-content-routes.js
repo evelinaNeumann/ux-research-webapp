@@ -9,6 +9,12 @@ import { ResearchTask } from '../models/ResearchTask.js';
 import { Study } from '../models/Study.js';
 import { User } from '../models/User.js';
 import { StudyAssignment } from '../models/StudyAssignment.js';
+import { StudyProfileCard } from '../models/StudyProfileCard.js';
+import {
+  UserStudyProfile,
+  USER_PROFILE_AGE_RANGES,
+  USER_PROFILE_ROLE_CATEGORIES,
+} from '../models/UserStudyProfile.js';
 import { badRequest, notFound } from '../utils/errors.js';
 
 const router = Router();
@@ -55,6 +61,56 @@ router.delete('/users/:userId', async (req, res, next) => {
   res.status(204).send();
 });
 
+router.get('/users/:userId/profiles', async (req, res, next) => {
+  const user = await User.findById(req.params.userId);
+  if (!user) return next(notFound('user not found'));
+
+  const items = await UserStudyProfile.find({ user_id: req.params.userId })
+    .populate('study_id', 'name type version')
+    .sort({ completed_at: -1 });
+  res.json(items);
+});
+
+router.put('/users/:userId/profiles/:studyId', async (req, res, next) => {
+  const { age_range, role_category, role_custom, key_points } = req.body;
+
+  if (!USER_PROFILE_AGE_RANGES.includes(age_range)) return next(badRequest('invalid age_range'));
+  if (!USER_PROFILE_ROLE_CATEGORIES.includes(role_category)) return next(badRequest('invalid role_category'));
+  if (role_category === 'other' && !String(role_custom || '').trim()) {
+    return next(badRequest('role_custom required for other role'));
+  }
+  if (!Array.isArray(key_points) || key_points.length !== 4) {
+    return next(badRequest('exactly 4 key_points required'));
+  }
+
+  const user = await User.findById(req.params.userId);
+  if (!user) return next(notFound('user not found'));
+  const study = await Study.findById(req.params.studyId);
+  if (!study) return next(notFound('study not found'));
+
+  const cards = await StudyProfileCard.find({ study_id: req.params.studyId, is_active: true });
+  const allowed = new Set(cards.map((c) => c.label));
+  for (const point of key_points) {
+    if (!allowed.has(point)) return next(badRequest('key_points contain invalid values'));
+  }
+
+  const profile = await UserStudyProfile.findOneAndUpdate(
+    { user_id: req.params.userId, study_id: req.params.studyId },
+    {
+      user_id: req.params.userId,
+      study_id: req.params.studyId,
+      age_range,
+      role_category,
+      role_custom: role_category === 'other' ? String(role_custom).trim() : '',
+      key_points,
+      completed_at: new Date(),
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  res.json(profile);
+});
+
 router.get('/studies/:studyId/assignments', async (req, res) => {
   const items = await StudyAssignment.find({ study_id: req.params.studyId, is_active: true })
     .populate('user_id', 'username role')
@@ -85,6 +141,46 @@ router.delete('/studies/:studyId/assignments/:userId', async (req, res) => {
     { study_id: req.params.studyId, user_id: req.params.userId },
     { is_active: false }
   );
+  res.status(204).send();
+});
+
+router.get('/studies/:studyId/profile-cards', async (req, res) => {
+  const items = await StudyProfileCard.find({ study_id: req.params.studyId, is_active: true }).sort({ order_index: 1 });
+  res.json(items);
+});
+
+router.post('/studies/:studyId/profile-cards', async (req, res, next) => {
+  const { label } = req.body;
+  if (!String(label || '').trim()) return next(badRequest('label required'));
+
+  const count = await StudyProfileCard.countDocuments({ study_id: req.params.studyId, is_active: true });
+  if (count >= 8) return next(badRequest('max 8 profile cards allowed per study'));
+
+  const item = await StudyProfileCard.create({
+    study_id: req.params.studyId,
+    label: String(label).trim(),
+    order_index: count,
+    is_active: true,
+  });
+  res.status(201).json(item);
+});
+
+router.put('/profile-cards/:cardId', async (req, res, next) => {
+  const { label, order_index, is_active } = req.body;
+  const item = await StudyProfileCard.findById(req.params.cardId);
+  if (!item) return next(notFound('profile card not found'));
+  if (label !== undefined) item.label = String(label).trim();
+  if (order_index !== undefined) item.order_index = Number(order_index);
+  if (is_active !== undefined) item.is_active = !!is_active;
+  await item.save();
+  res.json(item);
+});
+
+router.delete('/profile-cards/:cardId', async (req, res, next) => {
+  const item = await StudyProfileCard.findById(req.params.cardId);
+  if (!item) return next(notFound('profile card not found'));
+  item.is_active = false;
+  await item.save();
   res.status(204).send();
 });
 

@@ -6,5 +6,6 @@ export const studyApi = {
   getQuestions: (id) => http(`/studies/${id}/questions`),
   getCards: (id) => http(`/studies/${id}/cards`),
   getImages: (id) => http(`/studies/${id}/images`),
+  getProfileCards: (id) => http(`/studies/${id}/profile-cards`),
   create: (payload) => http('/studies', { method: 'POST', body: JSON.stringify(payload) }),
 };

@@ -1,0 +1,35 @@
+.profile-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.hint {
+  margin: 0;
+  color: #4b5563;
+}
+
+.subtext {
+  margin-left: 0.5rem;
+  color: #6b7280;
+}
+
+.point-grid {
+  margin-top: 0.6rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.5rem;
+}
+
+.point {
+  border: 1px solid #d8dce7;
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+}
+
+.point.active {
+  border-color: #1d4ed8;
+  background: #eef2ff;
+  color: #1e3a8a;
+}

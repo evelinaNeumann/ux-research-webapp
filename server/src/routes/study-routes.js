@@ -4,6 +4,7 @@ import { StudyAssignment } from '../models/StudyAssignment.js';
 import { Question } from '../models/Question.js';
 import { Card } from '../models/Card.js';
 import { ImageAsset } from '../models/ImageAsset.js';
+import { StudyProfileCard } from '../models/StudyProfileCard.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, badRequest } from '../utils/errors.js';
@@ -77,6 +78,16 @@ router.get('/:id/images', requireAuth, async (req, res, next) => {
   try {
     await assertStudyAccess(req.params.id, req.auth);
     const items = await ImageAsset.find({ study_id: req.params.id }).sort({ uploaded_at: 1 });
+    res.json(items);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id/profile-cards', requireAuth, async (req, res, next) => {
+  try {
+    await assertStudyAccess(req.params.id, req.auth);
+    const items = await StudyProfileCard.find({ study_id: req.params.id, is_active: true }).sort({ order_index: 1 });
     res.json(items);
   } catch (err) {
     next(err);
