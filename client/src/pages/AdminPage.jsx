@@ -16,6 +16,7 @@ export function AdminPage() {
   const [cardLabel, setCardLabel] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [items, setItems] = useState({ questions: [], cards: [], tasks: [] });
+  const [assignmentOpen, setAssignmentOpen] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -103,81 +104,52 @@ export function AdminPage() {
       </CardPanel>
 
       <CardPanel title="Studien-Zuweisung an Nutzer">
-        <div className="assign-toolbar">
-          <label className="form-field">
-            <span>Nutzer</span>
-            <select value={selectedUserForAssign} onChange={(e) => setSelectedUserForAssign(e.target.value)}>
-              {users.filter((u) => u.role === 'user').map((u) => (
-                <option key={u._id} value={u._id}>{u.username}</option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="primary-btn"
-            onClick={async () => {
-              if (!selectedStudy || !selectedUserForAssign) return;
-              await adminApi.assignUserToStudy(selectedStudy, selectedUserForAssign);
-              await loadContent(selectedStudy);
-            }}
-          >
-            Zur Studie zuweisen
+        <div className="assign-header">
+          <button type="button" className="ghost-btn" onClick={() => setAssignmentOpen((v) => !v)}>
+            {assignmentOpen ? 'Zuklappen' : 'Aufklappen'}
           </button>
         </div>
-        {assignments.map((a) => (
-          <div key={a._id} className="row-item">
-            <div>
-              <strong>{a.user_id?.username || 'unbekannt'}</strong>
-              <small>Zugewiesen</small>
-            </div>
-            <button
-              className="danger-btn"
-              onClick={async () => {
-                await adminApi.removeAssignment(selectedStudy, a.user_id?._id);
-                await loadContent(selectedStudy);
-              }}
-            >
-              Zuweisung entfernen
-            </button>
-          </div>
-        ))}
-      </CardPanel>
-
-      <CardPanel title="Benutzer & Rollen">
-        {users.map((u) => (
-          <div key={u._id} className="row-item">
-            <div>
-              <strong>{u.username}</strong>
-              <small>{u.role}</small>
-            </div>
-            <div className="row-actions">
-              <select
-                value={u.role}
-                onChange={async (e) => {
-                  const role = e.target.value;
-                  await adminApi.setUserRole(u._id, role);
-                  const usersRes = await adminApi.listUsers();
-                  setUsers(usersRes || []);
-                }}
-              >
-                <option value="user">user</option>
-                <option value="admin">admin</option>
-              </select>
+        {assignmentOpen && (
+          <>
+            <div className="assign-toolbar">
+              <label className="form-field">
+                <span>Nutzer</span>
+                <select value={selectedUserForAssign} onChange={(e) => setSelectedUserForAssign(e.target.value)}>
+                  {users.filter((u) => u.role === 'user').map((u) => (
+                    <option key={u._id} value={u._id}>{u.username}</option>
+                  ))}
+                </select>
+              </label>
               <button
-                type="button"
-                className="danger-btn"
+                className="primary-btn"
                 onClick={async () => {
-                  const ok = window.confirm(`Nutzer ${u.username} wirklich löschen?`);
-                  if (!ok) return;
-                  await adminApi.deleteUser(u._id);
-                  const usersRes = await adminApi.listUsers();
-                  setUsers(usersRes || []);
+                  if (!selectedStudy || !selectedUserForAssign) return;
+                  await adminApi.assignUserToStudy(selectedStudy, selectedUserForAssign);
+                  await loadContent(selectedStudy);
                 }}
               >
-                Löschen
+                Zur Studie zuweisen
               </button>
             </div>
-          </div>
-        ))}
+            {assignments.map((a) => (
+              <div key={a._id} className="row-item">
+                <div>
+                  <strong>{a.user_id?.username || 'unbekannt'}</strong>
+                  <small>Zugewiesen</small>
+                </div>
+                <button
+                  className="danger-btn"
+                  onClick={async () => {
+                    await adminApi.removeAssignment(selectedStudy, a.user_id?._id);
+                    await loadContent(selectedStudy);
+                  }}
+                >
+                  Zuweisung entfernen
+                </button>
+              </div>
+            ))}
+          </>
+        )}
       </CardPanel>
 
       <div className="admin-grid">
@@ -193,7 +165,37 @@ export function AdminPage() {
           >
             Frage hinzufügen
           </button>
-          {items.questions.map((q) => <div key={q._id} className="chip">{q.text}</div>)}
+          {items.questions.map((q) => (
+            <div key={q._id} className="item-row">
+              <div className="chip">{q.text}</div>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={async () => {
+                    const text = window.prompt('Frage bearbeiten', q.text);
+                    if (!text || text.trim() === q.text) return;
+                    await adminApi.updateQuestion(q._id, { text: text.trim() });
+                    await loadContent(selectedStudy);
+                  }}
+                >
+                  Bearbeiten
+                </button>
+                <button
+                  type="button"
+                  className="danger-btn"
+                  onClick={async () => {
+                    const ok = window.confirm('Frage wirklich löschen?');
+                    if (!ok) return;
+                    await adminApi.deleteQuestion(q._id);
+                    await loadContent(selectedStudy);
+                  }}
+                >
+                  Löschen
+                </button>
+              </div>
+            </div>
+          ))}
         </CardPanel>
 
         <CardPanel title="Cards">
@@ -208,7 +210,37 @@ export function AdminPage() {
           >
             Card hinzufügen
           </button>
-          {items.cards.map((c) => <div key={c._id} className="chip">{c.label}</div>)}
+          {items.cards.map((c) => (
+            <div key={c._id} className="item-row">
+              <div className="chip">{c.label}</div>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={async () => {
+                    const label = window.prompt('Card bearbeiten', c.label);
+                    if (!label || label.trim() === c.label) return;
+                    await adminApi.updateCard(c._id, { label: label.trim() });
+                    await loadContent(selectedStudy);
+                  }}
+                >
+                  Bearbeiten
+                </button>
+                <button
+                  type="button"
+                  className="danger-btn"
+                  onClick={async () => {
+                    const ok = window.confirm('Card wirklich löschen?');
+                    if (!ok) return;
+                    await adminApi.deleteCard(c._id);
+                    await loadContent(selectedStudy);
+                  }}
+                >
+                  Löschen
+                </button>
+              </div>
+            </div>
+          ))}
         </CardPanel>
 
         <CardPanel title="Aufgaben">
@@ -227,7 +259,37 @@ export function AdminPage() {
           >
             Task hinzufügen
           </button>
-          {items.tasks.map((t) => <div key={t._id} className="chip">{t.title}</div>)}
+          {items.tasks.map((t) => (
+            <div key={t._id} className="item-row">
+              <div className="chip">{t.title}</div>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={async () => {
+                    const title = window.prompt('Aufgabe bearbeiten', t.title);
+                    if (!title || title.trim() === t.title) return;
+                    await adminApi.updateTask(t._id, { title: title.trim() });
+                    await loadContent(selectedStudy);
+                  }}
+                >
+                  Bearbeiten
+                </button>
+                <button
+                  type="button"
+                  className="danger-btn"
+                  onClick={async () => {
+                    const ok = window.confirm('Aufgabe wirklich löschen?');
+                    if (!ok) return;
+                    await adminApi.deleteTask(t._id);
+                    await loadContent(selectedStudy);
+                  }}
+                >
+                  Löschen
+                </button>
+              </div>
+            </div>
+          ))}
         </CardPanel>
       </div>
     </div>

@@ -13,10 +13,19 @@ export const adminApi = {
   listQuestions: (studyId) => http(`/admin/studies/${studyId}/questions`),
   createQuestion: (studyId, payload) =>
     http(`/admin/studies/${studyId}/questions`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateQuestion: (questionId, payload) =>
+    http(`/admin/questions/${questionId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteQuestion: (questionId) => http(`/admin/questions/${questionId}`, { method: 'DELETE' }),
   listCards: (studyId) => http(`/admin/studies/${studyId}/cards`),
   createCard: (studyId, payload) =>
     http(`/admin/studies/${studyId}/cards`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateCard: (cardId, payload) =>
+    http(`/admin/cards/${cardId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteCard: (cardId) => http(`/admin/cards/${cardId}`, { method: 'DELETE' }),
   listTasks: (studyId) => http(`/admin/studies/${studyId}/tasks`),
   createTask: (studyId, payload) =>
     http(`/admin/studies/${studyId}/tasks`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateTask: (taskId, payload) =>
+    http(`/admin/tasks/${taskId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteTask: (taskId) => http(`/admin/tasks/${taskId}`, { method: 'DELETE' }),
 };

@@ -1,0 +1,38 @@
+.admin-users-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.row-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.6rem;
+}
+
+.row-item small {
+  display: block;
+  color: #6b7280;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.row-actions select {
+  border: 1px solid #d8dce7;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+}
+
+.danger-btn {
+  border: 1px solid #fecaca;
+  background: #fff5f5;
+  color: #b91c1c;
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+}

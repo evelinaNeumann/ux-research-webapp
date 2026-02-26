@@ -16,6 +16,7 @@ export function AppLayout({ user }) {
         <h1>UX Research</h1>
         <nav>
           <Link to="/">Dashboard</Link>
+          {user?.role === 'admin' && <Link to="/admin/users">Benutzer & Rollen</Link>}
           <Link to="/user-data">Meine User Data</Link>
           {user?.role === 'admin' && <Link to="/admin">Admin</Link>}
         </nav>

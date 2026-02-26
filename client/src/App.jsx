@@ -5,6 +5,8 @@ import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AdminPage } from './pages/AdminPage';
 import { UserDataPage } from './pages/UserDataPage';
+import { SessionPage } from './pages/SessionPage';
+import { AdminUsersPage } from './pages/AdminUsersPage';
 
 function Protected({ user, children }) {
   if (!user) return <Navigate to="/login" replace />;
@@ -21,7 +23,7 @@ export function App({ user, setUser }) {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage onAuth={setUser} />} />
-      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/register" element={<RegisterPage onAuth={setUser} />} />
 
       <Route
         element={
@@ -31,7 +33,16 @@ export function App({ user, setUser }) {
         }
       >
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/session/:sessionId" element={<SessionPage />} />
         <Route path="/user-data" element={<UserDataPage />} />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminOnly user={user}>
+              <AdminUsersPage />
+            </AdminOnly>
+          }
+        />
         <Route
           path="/admin"
           element={

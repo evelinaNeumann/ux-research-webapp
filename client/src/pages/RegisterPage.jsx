@@ -4,7 +4,7 @@ import { authApi } from '../api/auth';
 import { FormField } from '../components/FormField';
 import './AuthPage.css';
 
-export function RegisterPage() {
+export function RegisterPage({ onAuth }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -15,7 +15,9 @@ export function RegisterPage() {
     setError('');
     try {
       await authApi.register(form);
-      navigate('/login');
+      const me = await authApi.me();
+      onAuth(me.user);
+      navigate('/');
     } catch (err) {
       setError(err.message);
     }

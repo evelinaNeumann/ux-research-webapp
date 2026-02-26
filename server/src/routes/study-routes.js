@@ -1,11 +1,29 @@
 import { Router } from 'express';
 import { Study } from '../models/Study.js';
 import { StudyAssignment } from '../models/StudyAssignment.js';
+import { Question } from '../models/Question.js';
+import { Card } from '../models/Card.js';
+import { ImageAsset } from '../models/ImageAsset.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, badRequest } from '../utils/errors.js';
 
 const router = Router();
+
+async function assertStudyAccess(studyId, auth) {
+  const study = await Study.findById(studyId);
+  if (!study) throw notFound('study not found');
+  if (auth.role !== 'admin') {
+    if (!study.is_active) throw notFound('study not found');
+    const assignment = await StudyAssignment.findOne({
+      study_id: study._id,
+      user_id: auth.sub,
+      is_active: true,
+    });
+    if (!assignment) throw notFound('study not found');
+  }
+  return study;
+}
 
 router.get('/', requireAuth, async (req, res, next) => {
   try {
@@ -28,18 +46,38 @@ router.get('/', requireAuth, async (req, res, next) => {
 
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
-    const study = await Study.findById(req.params.id);
-    if (!study) throw notFound('study not found');
-    if (req.auth.role !== 'admin') {
-      if (!study.is_active) throw notFound('study not found');
-      const assignment = await StudyAssignment.findOne({
-        study_id: study._id,
-        user_id: req.auth.sub,
-        is_active: true,
-      });
-      if (!assignment) throw notFound('study not found');
-    }
+    const study = await assertStudyAccess(req.params.id, req.auth);
     res.json(study);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id/questions', requireAuth, async (req, res, next) => {
+  try {
+    await assertStudyAccess(req.params.id, req.auth);
+    const items = await Question.find({ study_id: req.params.id }).sort({ _id: 1 });
+    res.json(items);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id/cards', requireAuth, async (req, res, next) => {
+  try {
+    await assertStudyAccess(req.params.id, req.auth);
+    const items = await Card.find({ study_id: req.params.id }).sort({ _id: 1 });
+    res.json(items);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id/images', requireAuth, async (req, res, next) => {
+  try {
+    await assertStudyAccess(req.params.id, req.auth);
+    const items = await ImageAsset.find({ study_id: req.params.id }).sort({ uploaded_at: 1 });
+    res.json(items);
   } catch (err) {
     next(err);
   }

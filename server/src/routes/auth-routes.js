@@ -16,6 +16,9 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const PASSWORD_POLICY_MESSAGE =
+  'Passwort muss beinhalten: mindestens 11 Zeichen, mindestens einen Großbuchstaben (A-Z), mindestens einen Kleinbuchstaben (a-z), mindestens eine Zahl (0-9), mindestens ein Sonderzeichen (z. B. !@#$%), und es darf den Benutzernamen nicht enthalten.';
+
 function validatePassword(password, username) {
   if (!password || password.length < 11) return false;
   if (!/[A-Z]/.test(password)) return false;
@@ -26,19 +29,35 @@ function validatePassword(password, username) {
   return true;
 }
 
+function issueAuthCookie(res, user) {
+  const token = jwt.sign({ sub: String(user._id), role: user.role, username: user.username }, env.jwtSecret, {
+    expiresIn: env.jwtExpiresIn,
+  });
+
+  res.cookie('token', token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: false,
+    maxAge: 8 * 60 * 60 * 1000,
+  });
+
+  return token;
+}
+
 router.post('/register', async (req, res, next) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) throw badRequest('username and password required');
-    if (!validatePassword(password, username)) throw badRequest('password policy failed');
+    if (!validatePassword(password, username)) throw badRequest(PASSWORD_POLICY_MESSAGE);
 
     const exists = await User.findOne({ username });
     if (exists) throw badRequest('username exists');
 
     const password_hash = await bcrypt.hash(password, 12);
     const user = await User.create({ username, password_hash, role: 'user' });
+    const token = issueAuthCookie(res, user);
 
-    res.status(201).json({ id: user._id, username: user.username, role: user.role });
+    res.status(201).json({ id: user._id, username: user.username, role: user.role, accessToken: token });
   } catch (err) {
     next(err);
   }
@@ -50,7 +69,7 @@ router.post('/register-admin', async (req, res, next) => {
     if (!username || !password || !bootstrapKey) {
       throw badRequest('username, password and bootstrapKey required');
     }
-    if (!validatePassword(password, username)) throw badRequest('password policy failed');
+    if (!validatePassword(password, username)) throw badRequest(PASSWORD_POLICY_MESSAGE);
     if (!env.adminBootstrapKey || bootstrapKey !== env.adminBootstrapKey) {
       throw unauthorized('invalid bootstrap key');
     }
@@ -79,16 +98,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) throw unauthorized('invalid credentials');
 
-    const token = jwt.sign({ sub: String(user._id), role: user.role, username: user.username }, env.jwtSecret, {
-      expiresIn: env.jwtExpiresIn,
-    });
-
-    res.cookie('token', token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: false,
-      maxAge: 8 * 60 * 60 * 1000,
-    });
+    const token = issueAuthCookie(res, user);
 
     res.json({ accessToken: token, role: user.role, username: user.username });
   } catch (err) {
@@ -111,7 +121,7 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
 
     const ok = await bcrypt.compare(currentPassword, user.password_hash);
     if (!ok) throw unauthorized('current password is invalid');
-    if (!validatePassword(newPassword, user.username)) throw badRequest('password policy failed');
+    if (!validatePassword(newPassword, user.username)) throw badRequest(PASSWORD_POLICY_MESSAGE);
 
     user.password_hash = await bcrypt.hash(newPassword, 12);
     await user.save();

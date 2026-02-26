@@ -40,6 +40,9 @@ POST /auth/change-password
 
 GET /studies (Admin: alle, User: nur zugewiesene aktive Studien)
 GET /studies/:id
+GET /studies/:id/questions
+GET /studies/:id/cards
+GET /studies/:id/images
 POST /studies (Admin)
 PUT /studies/:id (Admin)
 DELETE /studies/:id (Admin)
