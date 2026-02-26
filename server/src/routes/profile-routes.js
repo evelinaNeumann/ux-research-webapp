@@ -42,6 +42,51 @@ router.get('/study/:studyId', async (req, res, next) => {
   }
 });
 
+router.get('/study/:studyId/prefill', async (req, res, next) => {
+  try {
+    const study = await Study.findById(req.params.studyId);
+    if (!study) throw notFound('study not found');
+
+    if (req.auth.role !== 'admin') {
+      const assignment = await StudyAssignment.findOne({
+        study_id: req.params.studyId,
+        user_id: req.auth.sub,
+        is_active: true,
+      });
+      if (!assignment) throw forbidden('study not assigned to user');
+    }
+
+    if (!study.inherit_user_profile_points || !study.profile_cards_source_study_id) {
+      return res.json({ source_study_id: null, source_study_name: '', key_points: [] });
+    }
+
+    const sourceProfile = await UserStudyProfile.findOne({
+      user_id: req.auth.sub,
+      study_id: study.profile_cards_source_study_id,
+    });
+    if (!sourceProfile) {
+      return res.json({
+        source_study_id: study.profile_cards_source_study_id,
+        source_study_name: '',
+        key_points: [],
+      });
+    }
+
+    const sourceStudy = await Study.findById(study.profile_cards_source_study_id, { name: 1 });
+    const cards = await StudyProfileCard.find({ study_id: req.params.studyId, is_active: true }, { label: 1 });
+    const allowed = new Set(cards.map((c) => c.label));
+    const key_points = (sourceProfile.key_points || []).filter((point) => allowed.has(point)).slice(0, 4);
+
+    res.json({
+      source_study_id: study.profile_cards_source_study_id,
+      source_study_name: sourceStudy?.name || '',
+      key_points,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/me', async (req, res, next) => {
   try {
     const items = await UserStudyProfile.find({ user_id: req.auth.sub })

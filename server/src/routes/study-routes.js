@@ -5,6 +5,7 @@ import { Question } from '../models/Question.js';
 import { Card } from '../models/Card.js';
 import { ImageAsset } from '../models/ImageAsset.js';
 import { StudyProfileCard } from '../models/StudyProfileCard.js';
+import { uploadStudyPdf } from '../middleware/upload-study-pdf.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, badRequest } from '../utils/errors.js';
@@ -24,6 +25,36 @@ async function assertStudyAccess(studyId, auth) {
     if (!assignment) throw notFound('study not found');
   }
   return study;
+}
+
+async function validateProfileInheritanceConfig({
+  targetStudyId = null,
+  profile_cards_source_study_id,
+  inherit_profile_cards,
+  inherit_user_profile_points,
+}) {
+  const sourceId = profile_cards_source_study_id || null;
+  const inheritanceEnabled = !!inherit_profile_cards || !!inherit_user_profile_points;
+
+  if (!inheritanceEnabled) {
+    return { sourceId: null, inheritProfileCards: false, inheritUserPoints: false };
+  }
+
+  if (!sourceId) {
+    throw badRequest('source study required when inheritance is enabled');
+  }
+  if (targetStudyId && String(targetStudyId) === String(sourceId)) {
+    throw badRequest('source study cannot be the same as target study');
+  }
+
+  const sourceStudy = await Study.findById(sourceId);
+  if (!sourceStudy) throw notFound('source study not found');
+
+  return {
+    sourceId: sourceStudy._id,
+    inheritProfileCards: !!inherit_profile_cards,
+    inheritUserPoints: !!inherit_user_profile_points,
+  };
 }
 
 router.get('/', requireAuth, async (req, res, next) => {
@@ -96,9 +127,30 @@ router.get('/:id/profile-cards', requireAuth, async (req, res, next) => {
 
 router.post('/', requireAuth, requireRole('admin'), async (req, res, next) => {
   try {
-    const { name, type, module_order } = req.body;
+    const {
+      name,
+      description,
+      type,
+      module_order,
+      profile_cards_source_study_id,
+      inherit_profile_cards,
+      inherit_user_profile_points,
+    } = req.body;
     if (!name) throw badRequest('name required');
-    const study = await Study.create({ name, type, module_order });
+    const inheritance = await validateProfileInheritanceConfig({
+      profile_cards_source_study_id,
+      inherit_profile_cards,
+      inherit_user_profile_points,
+    });
+    const study = await Study.create({
+      name,
+      description,
+      type,
+      module_order,
+      profile_cards_source_study_id: inheritance.sourceId,
+      inherit_profile_cards: inheritance.inheritProfileCards,
+      inherit_user_profile_points: inheritance.inheritUserPoints,
+    });
     res.status(201).json(study);
   } catch (err) {
     next(err);
@@ -107,17 +159,108 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res, next) => {
 
 router.put('/:id', requireAuth, requireRole('admin'), async (req, res, next) => {
   try {
-    const { name, type, is_active, module_order } = req.body;
+    const {
+      name,
+      description,
+      type,
+      is_active,
+      module_order,
+      profile_cards_source_study_id,
+      inherit_profile_cards,
+      inherit_user_profile_points,
+    } = req.body;
     const study = await Study.findById(req.params.id);
     if (!study) throw notFound('study not found');
 
     if (name !== undefined) study.name = name;
+    if (description !== undefined) study.description = description;
     if (type !== undefined) study.type = type;
     if (is_active !== undefined) study.is_active = is_active;
     if (module_order !== undefined) study.module_order = module_order;
+    if (
+      profile_cards_source_study_id !== undefined ||
+      inherit_profile_cards !== undefined ||
+      inherit_user_profile_points !== undefined
+    ) {
+      const inheritance = await validateProfileInheritanceConfig({
+        targetStudyId: study._id,
+        profile_cards_source_study_id:
+          profile_cards_source_study_id !== undefined
+            ? profile_cards_source_study_id
+            : study.profile_cards_source_study_id,
+        inherit_profile_cards:
+          inherit_profile_cards !== undefined ? inherit_profile_cards : study.inherit_profile_cards,
+        inherit_user_profile_points:
+          inherit_user_profile_points !== undefined
+            ? inherit_user_profile_points
+            : study.inherit_user_profile_points,
+      });
+      study.profile_cards_source_study_id = inheritance.sourceId;
+      study.inherit_profile_cards = inheritance.inheritProfileCards;
+      study.inherit_user_profile_points = inheritance.inheritUserPoints;
+    }
     study.version += 1;
 
     await study.save();
+    res.json(study);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/profile-cards/import', requireAuth, requireRole('admin'), async (req, res, next) => {
+  try {
+    const { source_study_id, inherit_user_profile_points } = req.body;
+    if (!source_study_id) throw badRequest('source_study_id required');
+
+    const targetStudy = await Study.findById(req.params.id);
+    if (!targetStudy) throw notFound('study not found');
+    if (String(targetStudy._id) === String(source_study_id)) {
+      throw badRequest('source study cannot be the same as target study');
+    }
+
+    const sourceStudy = await Study.findById(source_study_id);
+    if (!sourceStudy) throw notFound('source study not found');
+
+    const sourceCards = await StudyProfileCard.find({ study_id: sourceStudy._id, is_active: true }).sort({
+      order_index: 1,
+      _id: 1,
+    });
+    if (!sourceCards.length) throw badRequest('source study has no active profile cards');
+
+    const cardsToCopy = sourceCards.slice(0, 8);
+    await StudyProfileCard.deleteMany({ study_id: targetStudy._id });
+    await StudyProfileCard.insertMany(
+      cardsToCopy.map((card, index) => ({
+        study_id: targetStudy._id,
+        label: card.label,
+        order_index: index,
+        is_active: true,
+      }))
+    );
+
+    targetStudy.profile_cards_source_study_id = sourceStudy._id;
+    targetStudy.inherit_profile_cards = true;
+    targetStudy.inherit_user_profile_points = !!inherit_user_profile_points;
+    await targetStudy.save();
+
+    const cards = await StudyProfileCard.find({ study_id: targetStudy._id, is_active: true }).sort({ order_index: 1 });
+    res.json({ study: targetStudy, cards });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/brief-pdf', requireAuth, requireRole('admin'), uploadStudyPdf.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) throw badRequest('pdf file required');
+    const study = await Study.findById(req.params.id);
+    if (!study) throw notFound('study not found');
+
+    study.brief_pdf_path = `/uploads/study-briefs/${req.file.filename}`;
+    study.brief_pdf_name = req.file.originalname;
+    await study.save();
+
     res.json(study);
   } catch (err) {
     next(err);

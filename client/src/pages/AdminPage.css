@@ -10,6 +10,25 @@
   gap: 1rem;
 }
 
+.feedback {
+  margin: 0.65rem 0 0;
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+.feedback.success {
+  background: #ecfdf3;
+  border: 1px solid #a7f3d0;
+  color: #166534;
+}
+
+.feedback.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
 .admin-toolbar select {
   margin-left: 0.5rem;
   border: 1px solid #d8dce7;
@@ -21,6 +40,83 @@
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.study-description-field {
+  grid-column: 1 / -1;
+}
+
+.study-description-field textarea {
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+  resize: vertical;
+  min-height: 90px;
+}
+
+.study-edit-card {
+  margin-top: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.study-edit-card h4,
+.pdf-upload-block h5 {
+  margin: 0;
+}
+
+.checkbox-field input {
+  width: 18px;
+  height: 18px;
+  margin-top: 0.35rem;
+}
+
+.pdf-upload-block {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 0.75rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.dropzone {
+  border: 1px dashed #c7cfdf;
+  border-radius: 12px;
+  padding: 0.95rem;
+  display: grid;
+  gap: 0.4rem;
+  color: #475569;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.dropzone input[type='file'] {
+  width: 100%;
+}
+
+.dropzone.is-dragover {
+  border-color: #3b82f6;
+  background: #eef4ff;
+}
+
+.pdf-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.pdf-link {
+  text-decoration: none;
+}
+
+.study-list {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.55rem;
 }
 
 .assign-header {

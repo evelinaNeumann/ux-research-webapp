@@ -3,6 +3,14 @@ import mongoose from 'mongoose';
 const studySchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
+    description: { type: String, default: '' },
+    profile_cards_source_study_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Study',
+      default: null,
+    },
+    inherit_profile_cards: { type: Boolean, default: false },
+    inherit_user_profile_points: { type: Boolean, default: false },
     type: {
       type: String,
       enum: ['questionnaire', 'card_sort', 'image_rating', 'mixed'],
@@ -15,6 +23,8 @@ const studySchema = new mongoose.Schema(
       type: [String],
       default: ['questionnaire', 'card_sort', 'image_rating'],
     },
+    brief_pdf_path: { type: String, default: '' },
+    brief_pdf_name: { type: String, default: '' },
   },
   { timestamps: { createdAt: 'created_at', updatedAt: true } }
 );

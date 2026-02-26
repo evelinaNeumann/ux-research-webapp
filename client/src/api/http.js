@@ -1,12 +1,18 @@
-const API_BASE = 'http://localhost:4000';
+export const API_BASE = 'http://localhost:4000';
 
 export async function http(path, options = {}) {
+  const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const headers = {
+    ...(options.headers || {}),
+  };
+
+  if (!isFormDataBody && !headers['Content-Type'] && !headers['content-type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
+    headers,
     ...options,
   });
 

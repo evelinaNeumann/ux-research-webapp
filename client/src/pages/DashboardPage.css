@@ -17,6 +17,17 @@
   color: #6b7280;
 }
 
+.session-info {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.study-description {
+  margin-top: 0.2rem;
+  color: #4b5563;
+  max-width: 70ch;
+}
+
 .hint {
   margin: 0 0 0.6rem;
   color: #6b7280;

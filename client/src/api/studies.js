@@ -8,4 +8,13 @@ export const studyApi = {
   getImages: (id) => http(`/studies/${id}/images`),
   getProfileCards: (id) => http(`/studies/${id}/profile-cards`),
   create: (payload) => http('/studies', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) => http(`/studies/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  uploadBriefPdf: (id, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return http(`/studies/${id}/brief-pdf`, { method: 'POST', body: formData });
+  },
+  importProfileCards: (id, payload) =>
+    http(`/studies/${id}/profile-cards/import`, { method: 'POST', body: JSON.stringify(payload) }),
+  remove: (id) => http(`/studies/${id}`, { method: 'DELETE' }),
 };

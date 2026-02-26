@@ -24,6 +24,7 @@ export function SessionPage() {
   const [selectedCards, setSelectedCards] = useState({});
   const [imageInputs, setImageInputs] = useState({});
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState('info');
   const [activeModule, setActiveModule] = useState('questionnaire');
 
   useEffect(() => {
@@ -73,29 +74,70 @@ export function SessionPage() {
         }
         setImageInputs(ratingsMap);
 
-        if (st.module_order?.[0]) setActiveModule(st.module_order[0]);
+        const orderedModules = st.module_order?.length
+          ? st.module_order
+          : ['questionnaire', 'card_sort', 'image_rating'];
+        const available = orderedModules.filter((m) => {
+          if (m === 'card_sort') return (c || []).length > 0;
+          if (m === 'image_rating') return (i || []).length > 0;
+          return true;
+        });
+        setActiveModule(available[0] || 'questionnaire');
       } catch (err) {
         setMessage(err.message);
+        setMessageType('error');
       }
     })();
   }, [sessionId]);
+
+  const persistQuestionnaire = async () => {
+    if (!session) return;
+    for (const q of questions) {
+      if (questionAnswers[q._id] !== undefined && questionAnswers[q._id] !== '') {
+        await researchApi.submitAnswer({
+          session_id: session._id,
+          question_id: q._id,
+          response: questionAnswers[q._id],
+        });
+      }
+    }
+  };
+
+  const persistCardSort = async () => {
+    if (!session || cards.length === 0) return;
+    const selectedIds = Object.keys(selectedCards).filter((id) => selectedCards[id]);
+    await researchApi.submitCardSort({
+      session_id: session._id,
+      card_groups: [{ group_name: 'Meine Gruppe', card_ids: selectedIds }],
+    });
+  };
+
+  const persistImageRatings = async () => {
+    if (!session || images.length === 0) return;
+    for (const img of images) {
+      const input = imageInputs[img._id];
+      if (input?.rating) {
+        await researchApi.submitImageRating({
+          session_id: session._id,
+          image_id: img._id,
+          rating: Number(input.rating),
+          feedback: input.feedback || '',
+          recall_answer: input.recall || '',
+        });
+      }
+    }
+  };
 
   const saveQuestionnaire = async () => {
     if (!session) return;
     setMessage('');
     try {
-      for (const q of questions) {
-        if (questionAnswers[q._id] !== undefined && questionAnswers[q._id] !== '') {
-          await researchApi.submitAnswer({
-            session_id: session._id,
-            question_id: q._id,
-            response: questionAnswers[q._id],
-          });
-        }
-      }
+      await persistQuestionnaire();
       setMessage('Interview gespeichert.');
+      setMessageType('success');
     } catch (err) {
       setMessage(err.message);
+      setMessageType('error');
     }
   };
 
@@ -103,14 +145,12 @@ export function SessionPage() {
     if (!session) return;
     setMessage('');
     try {
-      const selectedIds = Object.keys(selectedCards).filter((id) => selectedCards[id]);
-      await researchApi.submitCardSort({
-        session_id: session._id,
-        card_groups: [{ group_name: 'Meine Gruppe', card_ids: selectedIds }],
-      });
+      await persistCardSort();
       setMessage('Card Sorting gespeichert.');
+      setMessageType('success');
     } catch (err) {
       setMessage(err.message);
+      setMessageType('error');
     }
   };
 
@@ -118,38 +158,47 @@ export function SessionPage() {
     if (!session) return;
     setMessage('');
     try {
-      for (const img of images) {
-        const input = imageInputs[img._id];
-        if (input?.rating) {
-          await researchApi.submitImageRating({
-            session_id: session._id,
-            image_id: img._id,
-            rating: Number(input.rating),
-            feedback: input.feedback || '',
-            recall_answer: input.recall || '',
-          });
-        }
-      }
+      await persistImageRatings();
       setMessage('Bildbewertungen gespeichert.');
+      setMessageType('success');
     } catch (err) {
       setMessage(err.message);
+      setMessageType('error');
     }
   };
 
   const completeSession = async () => {
     if (!session) return;
     try {
+      const unanswered = questions.filter((q) => {
+        const value = questionAnswers[q._id];
+        return value === undefined || value === null || String(value).trim() === '';
+      });
+      if (unanswered.length > 0) {
+        setMessageType('error');
+        setMessage('Bitte zuerst alle Interview-Fragen beantworten.');
+        return;
+      }
+      await persistQuestionnaire();
+      await persistCardSort();
+      await persistImageRatings();
       await sessionApi.complete(session._id);
       navigate('/');
     } catch (err) {
       setMessage(err.message);
+      setMessageType('error');
     }
   };
 
   if (!session || !study) return <div className="splash">Session wird geladen...</div>;
   const isReadOnly = session.status === 'done';
 
-  const modules = study.module_order?.length ? study.module_order : ['questionnaire', 'card_sort', 'image_rating'];
+  const orderedModules = study.module_order?.length ? study.module_order : ['questionnaire', 'card_sort', 'image_rating'];
+  const modules = orderedModules.filter((m) => {
+    if (m === 'card_sort') return cards.length > 0;
+    if (m === 'image_rating') return images.length > 0;
+    return true;
+  });
 
   return (
     <div className="session-grid">
@@ -166,7 +215,11 @@ export function SessionPage() {
             </button>
           ))}
         </div>
-        {message && <p className="info-text">{message}</p>}
+        {message && (
+          <p className={messageType === 'error' ? 'info-text error' : 'info-text success'}>
+            {message}
+          </p>
+        )}
       </CardPanel>
 
       {activeModule === 'questionnaire' && (
@@ -182,7 +235,12 @@ export function SessionPage() {
               />
             </label>
           ))}
-          {!isReadOnly && <button className="primary-btn" onClick={saveQuestionnaire}>Interview speichern</button>}
+          {!isReadOnly && (
+            <div className="action-row">
+              <button className="primary-btn" onClick={saveQuestionnaire}>Antworten speichern</button>
+              <button className="primary-btn" onClick={completeSession}>Studienteilnahme abschließen</button>
+            </div>
+          )}
         </CardPanel>
       )}
 
@@ -252,11 +310,6 @@ export function SessionPage() {
         </CardPanel>
       )}
 
-      {!isReadOnly && (
-        <CardPanel title="Session Abschluss">
-          <button className="primary-btn" onClick={completeSession}>Session abschließen</button>
-        </CardPanel>
-      )}
     </div>
   );
 }

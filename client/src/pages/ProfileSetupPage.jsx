@@ -19,6 +19,7 @@ export function ProfileSetupPage() {
   const [ageRanges, setAgeRanges] = useState([]);
   const [cards, setCards] = useState([]);
   const [message, setMessage] = useState('');
+  const [prefillInfo, setPrefillInfo] = useState('');
   const [form, setForm] = useState({
     age_range: '',
     role_category: 'schueler_azubi_student',
@@ -29,9 +30,21 @@ export function ProfileSetupPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [opts, profileCards] = await Promise.all([profileApi.options(), studyApi.getProfileCards(studyId)]);
+        const [opts, profileCards, prefill] = await Promise.all([
+          profileApi.options(),
+          studyApi.getProfileCards(studyId),
+          profileApi.getStudyPrefill(studyId),
+        ]);
         setAgeRanges(opts.age_ranges || []);
         setCards(profileCards || []);
+        const prefillPoints = Array.isArray(prefill?.key_points) ? prefill.key_points : [];
+        if (prefillPoints.length === 4) {
+          const sourceName = prefill.source_study_name || 'anderer Studie';
+          setForm((prev) => ({ ...prev, key_points: prefillPoints }));
+          setPrefillInfo(`4 Schlüsselwörter wurden aus ${sourceName} übernommen.`);
+        } else {
+          setPrefillInfo('');
+        }
 
         try {
           const existing = await profileApi.getStudyProfile(studyId);
@@ -41,6 +54,7 @@ export function ProfileSetupPage() {
             role_custom: existing.role_custom || '',
             key_points: existing.key_points || [],
           });
+          setPrefillInfo('');
         } catch {
           // no existing profile
         }
@@ -121,6 +135,7 @@ export function ProfileSetupPage() {
         <div>
           <strong>4 wichtigste Punkte wählen</strong>
           <small className="subtext">({form.key_points.length}/4 ausgewählt)</small>
+          {prefillInfo && <small className="subtext prefill-info">{prefillInfo}</small>}
           <div className="point-grid">
             {cards.map((c) => {
               const active = form.key_points.includes(c.label);

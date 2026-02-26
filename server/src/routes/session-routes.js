@@ -4,6 +4,8 @@ import { Session } from '../models/Session.js';
 import { Study } from '../models/Study.js';
 import { StudyAssignment } from '../models/StudyAssignment.js';
 import { UserStudyProfile } from '../models/UserStudyProfile.js';
+import { Question } from '../models/Question.js';
+import { Answer } from '../models/Answer.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, forbidden, badRequest } from '../utils/errors.js';
 
@@ -84,6 +86,23 @@ router.put('/:id/complete', async (req, res, next) => {
     const item = await Session.findById(req.params.id);
     if (!item) throw notFound('session not found');
     if (req.auth.role !== 'admin' && String(item.user_id) !== req.auth.sub) throw forbidden();
+
+    const questions = await Question.find({ study_id: item.study_id }, { _id: 1 });
+    if (questions.length > 0) {
+      const questionIds = questions.map((q) => String(q._id));
+      const answers = await Answer.find(
+        { session_id: item._id, question_id: { $in: questionIds } },
+        { question_id: 1, response: 1 }
+      );
+      const answered = new Set(
+        answers
+          .filter((a) => a.response !== undefined && a.response !== null && String(a.response).trim() !== '')
+          .map((a) => String(a.question_id))
+      );
+      if (answered.size < questionIds.length) {
+        throw badRequest('Bitte zuerst alle Interview-Fragen beantworten.');
+      }
+    }
 
     item.status = 'done';
     item.completed_at = new Date();
