@@ -6,9 +6,9 @@ import {
   USER_PROFILE_ROLE_CATEGORIES,
 } from '../models/UserStudyProfile.js';
 import { Study } from '../models/Study.js';
-import { StudyAssignment } from '../models/StudyAssignment.js';
 import { StudyProfileCard } from '../models/StudyProfileCard.js';
 import { badRequest, notFound, forbidden } from '../utils/errors.js';
+import { hasStudyAccessForUser } from '../utils/study-access.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -26,12 +26,8 @@ router.get('/study/:studyId', async (req, res, next) => {
     if (!study) throw notFound('study not found');
 
     if (req.auth.role !== 'admin') {
-      const assignment = await StudyAssignment.findOne({
-        study_id: req.params.studyId,
-        user_id: req.auth.sub,
-        is_active: true,
-      });
-      if (!assignment) throw forbidden('study not assigned to user');
+      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub);
+      if (!hasAccess) throw forbidden('study not assigned to user');
     }
 
     const profile = await UserStudyProfile.findOne({ user_id: req.auth.sub, study_id: req.params.studyId });
@@ -48,12 +44,8 @@ router.get('/study/:studyId/prefill', async (req, res, next) => {
     if (!study) throw notFound('study not found');
 
     if (req.auth.role !== 'admin') {
-      const assignment = await StudyAssignment.findOne({
-        study_id: req.params.studyId,
-        user_id: req.auth.sub,
-        is_active: true,
-      });
-      if (!assignment) throw forbidden('study not assigned to user');
+      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub);
+      if (!hasAccess) throw forbidden('study not assigned to user');
     }
 
     if (!study.inherit_user_profile_points || !study.profile_cards_source_study_id) {
@@ -107,20 +99,23 @@ router.put('/study/:studyId', async (req, res, next) => {
     if (role_category === 'other' && !String(role_custom || '').trim()) {
       throw badRequest('role_custom required for other role');
     }
-    if (!Array.isArray(key_points) || key_points.length !== 4) {
-      throw badRequest('exactly 4 key_points required');
+    const study = await Study.findById(req.params.studyId, { is_active: 1, assign_to_all_users: 1 });
+    if (!study) throw notFound('study not found');
+    if (req.auth.role !== 'admin') {
+      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub);
+      if (!hasAccess) throw forbidden('study not assigned to user');
     }
-
-    const assignment = await StudyAssignment.findOne({
-      study_id: req.params.studyId,
-      user_id: req.auth.sub,
-      is_active: true,
-    });
-    if (req.auth.role !== 'admin' && !assignment) throw forbidden('study not assigned to user');
 
     const cards = await StudyProfileCard.find({ study_id: req.params.studyId, is_active: true });
     const allowed = new Set(cards.map((c) => c.label));
-    if (cards.length < 8) throw badRequest('study must provide 8 profile cards before profile setup');
+    const hasProfileWords = cards.length > 0;
+    if (!Array.isArray(key_points)) throw badRequest('key_points must be an array');
+    if (hasProfileWords && key_points.length !== 4) {
+      throw badRequest('exactly 4 key_points required');
+    }
+    if (!hasProfileWords && key_points.length > 0) {
+      throw badRequest('key_points not allowed for studies without profile words');
+    }
 
     for (const point of key_points) {
       if (!allowed.has(point)) throw badRequest('key_points contain invalid values');

@@ -59,3 +59,24 @@
   padding: 0.55rem 0.7rem;
   color: #334155;
 }
+
+.auth-card .ghost-btn {
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  padding: 0.55rem 0.7rem;
+}
+
+.reset-box {
+  border: 1px solid #dbe7ff;
+  background: #f8fbff;
+  border-radius: 12px;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.reset-box h4 {
+  margin: 0;
+}

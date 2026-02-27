@@ -4,6 +4,15 @@ import { studyApi } from '../api/studies';
 import { analyticsApi } from '../api/analytics';
 import './AdminAnalyticsPage.css';
 
+function defaultModulesForStudy(study) {
+  const type = String(study?.type || 'mixed');
+  if (type === 'questionnaire') return ['questionnaire'];
+  if (type === 'card_sort') return ['card_sort'];
+  if (type === 'image_rating') return ['image_rating'];
+  if (type === 'task_work') return [];
+  return ['questionnaire', 'card_sort', 'image_rating'];
+}
+
 export function AdminAnalyticsPage() {
   const [studies, setStudies] = useState([]);
   const [selectedStudy, setSelectedStudy] = useState('');
@@ -56,6 +65,38 @@ export function AdminAnalyticsPage() {
     () => studies.find((s) => s._id === selectedStudy)?.name || 'Keine Studie',
     [studies, selectedStudy]
   );
+  const selectedStudyData = useMemo(
+    () => studies.find((s) => s._id === selectedStudy) || null,
+    [studies, selectedStudy]
+  );
+  const configuredModules = useMemo(
+    () => (selectedStudyData?.module_order?.length ? selectedStudyData.module_order : defaultModulesForStudy(selectedStudyData)),
+    [selectedStudyData]
+  );
+  const hasInterviewTab = configuredModules.includes('questionnaire') && (overview?.questionnaire_questions_total || 0) > 0;
+  const hasCardSortTab =
+    configuredModules.includes('card_sort') &&
+    ((overview?.card_sort?.configured_cards_total || 0) > 0 || (overview?.card_sort?.configured_columns_total || 0) > 0);
+  const hasImageTab = configuredModules.includes('image_rating') && (overview?.image_assets_total || 0) > 0;
+  const hasTaskTab = (overview?.task_work?.tasks?.length || 0) > 0 || selectedStudyData?.type === 'task_work';
+  const visibleTabs = useMemo(() => {
+    const tabs = [];
+    if (hasInterviewTab) tabs.push('questionnaire');
+    if (hasCardSortTab) tabs.push('card_sort');
+    if (hasImageTab) tabs.push('image_rating');
+    if (hasTaskTab) tabs.push('task_work');
+    return tabs;
+  }, [hasInterviewTab, hasCardSortTab, hasImageTab, hasTaskTab]);
+
+  useEffect(() => {
+    if (!visibleTabs.length) {
+      setActiveModuleTab('');
+      return;
+    }
+    if (!visibleTabs.includes(activeModuleTab)) {
+      setActiveModuleTab(visibleTabs[0]);
+    }
+  }, [visibleTabs, activeModuleTab]);
 
   const roleKey = (roleCategory, roleCustom) => {
     if (roleCategory === 'other') return `other:${roleCustom || 'ohne Angabe'}`;
@@ -351,27 +392,42 @@ export function AdminAnalyticsPage() {
             <>
               <div className="modules-top-row">
                 <div className="module-tabs">
-                  <button
-                    type="button"
-                    className={activeModuleTab === 'questionnaire' ? 'tab-btn active' : 'tab-btn'}
-                    onClick={() => setActiveModuleTab('questionnaire')}
-                  >
-                    Interview
-                  </button>
-                  <button
-                    type="button"
-                    className={activeModuleTab === 'card_sort' ? 'tab-btn active' : 'tab-btn'}
-                    onClick={() => setActiveModuleTab('card_sort')}
-                  >
-                    Card Sorting
-                  </button>
-                  <button
-                    type="button"
-                    className={activeModuleTab === 'image_rating' ? 'tab-btn active' : 'tab-btn'}
-                    onClick={() => setActiveModuleTab('image_rating')}
-                  >
-                    Bildauswertung
-                  </button>
+                  {hasInterviewTab && (
+                    <button
+                      type="button"
+                      className={activeModuleTab === 'questionnaire' ? 'tab-btn active' : 'tab-btn'}
+                      onClick={() => setActiveModuleTab('questionnaire')}
+                    >
+                      Interview
+                    </button>
+                  )}
+                  {hasCardSortTab && (
+                    <button
+                      type="button"
+                      className={activeModuleTab === 'card_sort' ? 'tab-btn active' : 'tab-btn'}
+                      onClick={() => setActiveModuleTab('card_sort')}
+                    >
+                      Card Sorting
+                    </button>
+                  )}
+                  {hasImageTab && (
+                    <button
+                      type="button"
+                      className={activeModuleTab === 'image_rating' ? 'tab-btn active' : 'tab-btn'}
+                      onClick={() => setActiveModuleTab('image_rating')}
+                    >
+                      Bildauswertung
+                    </button>
+                  )}
+                  {hasTaskTab && (
+                    <button
+                      type="button"
+                      className={activeModuleTab === 'task_work' ? 'tab-btn active' : 'tab-btn'}
+                      onClick={() => setActiveModuleTab('task_work')}
+                    >
+                      Aufgaben
+                    </button>
+                  )}
                 </div>
                 <div className="analytics-actions">
                   <button
@@ -401,7 +457,7 @@ export function AdminAnalyticsPage() {
                 </div>
               </div>
 
-              {activeModuleTab === 'questionnaire' && (
+              {hasInterviewTab && activeModuleTab === 'questionnaire' && (
                 <div>
                   {overview.questionnaire?.length > 0 ? (
                     overview.questionnaire.map((q) => (
@@ -428,7 +484,7 @@ export function AdminAnalyticsPage() {
                 </div>
               )}
 
-              {activeModuleTab === 'card_sort' && (
+              {hasCardSortTab && activeModuleTab === 'card_sort' && (
                 <div className="module-stack">
                   <div className="kpi-grid compact">
                     <article className="mini-kpi">
@@ -538,7 +594,7 @@ export function AdminAnalyticsPage() {
                 </div>
               )}
 
-              {activeModuleTab === 'image_rating' && (
+              {hasImageTab && activeModuleTab === 'image_rating' && (
                 <div>
                   {overview.image_rating?.length > 0 ? (
                     overview.image_rating.map((i) => (
@@ -552,6 +608,61 @@ export function AdminAnalyticsPage() {
                   )}
                 </div>
               )}
+
+              {hasTaskTab && activeModuleTab === 'task_work' && (
+                <div className="module-stack">
+                  <div className="kpi-grid compact">
+                    <article className="mini-kpi">
+                      <span>Antworten gesamt</span>
+                      <strong>{overview.task_work?.submissions_total ?? 0}</strong>
+                    </article>
+                    <article className="mini-kpi">
+                      <span>Tasks</span>
+                      <strong>{overview.task_work?.tasks?.length ?? 0}</strong>
+                    </article>
+                  </div>
+                  {(overview.task_work?.tasks || []).length > 0 ? (
+                    <div className="modules-data-grid">
+                      {(overview.task_work?.tasks || []).map((task) => (
+                        <section key={task.task_id} className="qa-block modules-data-grid-full">
+                          <p className="qa-question">{task.title}</p>
+                          <small>
+                            Gesamt: {task.total ?? 0} • korrekt: {task.correct ?? 0} • falsch: {task.incorrect ?? 0}
+                          </small>
+                          <div className="qa-answer-list">
+                            {(task.steps || []).map((step) => (
+                              <div key={`${task.task_id}-${step.step_index}`} className="list-row">
+                                <span>
+                                  Schritt {Number(step.step_index || 0) + 1}: {step.prompt || '-'}
+                                </span>
+                                <small>
+                                  n: {step.total ?? 0} • korrekt: {step.correct ?? 0} • falsch: {step.incorrect ?? 0} • Quote: {step.correct_rate ?? 0}%
+                                </small>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      ))}
+                      <section className="qa-block modules-data-grid-full">
+                        <p className="qa-question">Diagramm: Korrektquote je Aufgabenstellung</p>
+                        {renderCountBars(
+                          (overview.task_work?.tasks || []).flatMap((task) =>
+                            (task.steps || []).map((step) => ({
+                              label: `${task.title} - S${Number(step.step_index || 0) + 1}`,
+                              count: Number(step.correct_rate || 0),
+                            }))
+                          ),
+                          (row) => row.label,
+                          'Keine Aufgabenstellungs-Daten vorhanden.'
+                        )}
+                      </section>
+                    </div>
+                  ) : (
+                    <p>Keine Aufgaben-Daten vorhanden.</p>
+                  )}
+                </div>
+              )}
+              {!visibleTabs.length && <p>Für diese Studie sind keine Studienmodule hinterlegt.</p>}
             </>
           )}
         </CardPanel>

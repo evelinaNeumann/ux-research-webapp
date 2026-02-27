@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CardPanel } from '../components/CardPanel';
+import { API_BASE } from '../api/http';
 import { sessionApi } from '../api/sessions';
 import { studyApi } from '../api/studies';
 import { researchApi } from '../api/research';
@@ -12,6 +13,42 @@ const MODULE_LABELS = {
   image_rating: 'Bildbewertung',
 };
 
+function defaultModulesForStudy(study) {
+  const type = String(study?.type || 'mixed');
+  if (type === 'questionnaire') return ['questionnaire'];
+  if (type === 'card_sort') return ['card_sort'];
+  if (type === 'image_rating') return ['image_rating'];
+  if (type === 'task_work') return [];
+  return ['questionnaire', 'card_sort', 'image_rating'];
+}
+
+function sanitizeInteractiveHtml(html) {
+  if (!html) return '';
+  const styleBlocks = [];
+  const stylePattern = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  let styleMatch = stylePattern.exec(String(html));
+  while (styleMatch) {
+    let css = String(styleMatch[1] || '');
+    css = css.replace(/\bhtml\b/g, '.task-html-root');
+    css = css.replace(/\bbody\b/g, '.task-html-root');
+    styleBlocks.push(css);
+    styleMatch = stylePattern.exec(String(html));
+  }
+  const bodyMatch = String(html).match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  let content = bodyMatch ? bodyMatch[1] : String(html);
+  content = content.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
+  content = content.replace(/<link[\s\S]*?>/gi, '');
+  const styleTag = styleBlocks.length ? `<style>${styleBlocks.join('\n')}</style>` : '';
+  return `${styleTag}<div class="task-html-root">${content}</div>`;
+}
+
+function normalizeTextForCompare(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('de-DE');
+}
+
 export function SessionPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -21,17 +58,23 @@ export function SessionPage() {
   const [cards, setCards] = useState([]);
   const [cardSortColumns, setCardSortColumns] = useState([]);
   const [images, setImages] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [taskResponses, setTaskResponses] = useState({});
+  const [taskHtmlByPath, setTaskHtmlByPath] = useState({});
+  const [taskActiveStepById, setTaskActiveStepById] = useState({});
   const [questionAnswers, setQuestionAnswers] = useState({});
   const [cardAssignments, setCardAssignments] = useState({});
   const [customColumns, setCustomColumns] = useState([]);
   const [customColumnInput, setCustomColumnInput] = useState('');
   const [customCards, setCustomCards] = useState([]);
   const [customCardLabel, setCustomCardLabel] = useState('');
-  const [customCardColumn, setCustomCardColumn] = useState('');
+  const [draggedCardId, setDraggedCardId] = useState('');
+  const [snapCardId, setSnapCardId] = useState('');
+  const snapTimerRef = useRef(null);
   const [imageInputs, setImageInputs] = useState({});
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
-  const [activeModule, setActiveModule] = useState('questionnaire');
+  const [activeModule, setActiveModule] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -47,16 +90,19 @@ export function SessionPage() {
           studyApi.getCardSortColumns(s.study_id),
           studyApi.getImages(s.study_id),
         ]);
+        const loadedTasks = await studyApi.getTasks(s.study_id);
         setQuestions(q || []);
         setCards(c || []);
         setCardSortColumns(columns || []);
         setImages(i || []);
+        setTasks(loadedTasks || []);
 
         const [savedAnswers, savedCardSort, savedRatings] = await Promise.all([
           researchApi.getAnswersBySession(s._id),
           researchApi.getCardSortBySession(s._id),
           researchApi.getImageRatingsBySession(s._id),
         ]);
+        const savedTaskResponses = await researchApi.getTaskResponsesBySession(s._id);
 
         const answerMap = {};
         for (const a of (savedAnswers || [])) {
@@ -85,22 +131,40 @@ export function SessionPage() {
           };
         }
         setImageInputs(ratingsMap);
+        setTaskResponses(
+          Object.fromEntries(
+            (savedTaskResponses || []).map((entry) => [
+              `${String(entry.task_id)}:${Number(entry.step_index || 0)}`,
+              {
+                selected_ids: Array.isArray(entry.selected_ids) ? entry.selected_ids : [],
+                is_correct: !!entry.is_correct,
+                result_status: entry.result_status || 'incorrect',
+              },
+            ])
+          )
+        );
 
-        const orderedModules = st.module_order?.length
-          ? st.module_order
-          : ['questionnaire', 'card_sort', 'image_rating'];
+        const orderedModules = st.module_order?.length ? st.module_order : defaultModulesForStudy(st);
         const available = orderedModules.filter((m) => {
+          if (m === 'questionnaire') return (q || []).length > 0;
           if (m === 'card_sort') return (c || []).length > 0 && (columns || []).length > 0;
           if (m === 'image_rating') return (i || []).length > 0;
           return true;
         });
-        setActiveModule(available[0] || 'questionnaire');
+        setActiveModule(available[0] || '');
       } catch (err) {
         setMessage(err.message);
         setMessageType('error');
       }
     })();
   }, [sessionId]);
+
+  useEffect(
+    () => () => {
+      if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+    },
+    []
+  );
 
   const persistQuestionnaire = async () => {
     if (!session) return;
@@ -162,6 +226,45 @@ export function SessionPage() {
     }
   };
 
+  const getTaskFiles = (task) =>
+    task.attachments?.length > 0
+      ? task.attachments
+      : task.attachment_path
+        ? [{
+            path: task.attachment_path,
+            format:
+              task.content_format ||
+              (String(task.attachment_name || '').toLowerCase().endsWith('.pdf') ? 'pdf' : 'html'),
+          }]
+        : [];
+
+  useEffect(() => {
+    const htmlPaths = tasks
+      .flatMap((task) => getTaskFiles(task))
+      .filter((file) => file.format === 'html' && file.path)
+      .map((file) => file.path);
+    const uniquePaths = Array.from(new Set(htmlPaths));
+    if (uniquePaths.length === 0) {
+      setTaskHtmlByPath({});
+      return;
+    }
+
+    (async () => {
+      const loadedEntries = await Promise.all(
+        uniquePaths.map(async (path) => {
+          try {
+            const res = await fetch(`${API_BASE}${path}`);
+            const text = await res.text();
+            return [path, sanitizeInteractiveHtml(text)];
+          } catch {
+            return [path, ''];
+          }
+        })
+      );
+      setTaskHtmlByPath(Object.fromEntries(loadedEntries));
+    })();
+  }, [tasks]);
+
   const saveQuestionnaire = async () => {
     if (!session) return;
     setMessage('');
@@ -204,7 +307,7 @@ export function SessionPage() {
   const completeSession = async () => {
     if (!session) return;
     try {
-      const orderedModules = study.module_order?.length ? study.module_order : ['questionnaire', 'card_sort', 'image_rating'];
+      const orderedModules = study.module_order?.length ? study.module_order : defaultModulesForStudy(study);
 
       if (orderedModules.includes('questionnaire')) {
         const unanswered = questions.filter((q) => {
@@ -246,6 +349,25 @@ export function SessionPage() {
           return;
         }
       }
+
+      const interactiveTaskSteps = tasks
+        .filter(
+          (task) =>
+            Array.isArray(task.config?.interactive?.selectable_ids) &&
+            task.config.interactive.selectable_ids.length > 0
+        )
+        .flatMap((task) => {
+          const sortedSteps = Array.isArray(task.steps) && task.steps.length > 0
+            ? [...task.steps].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
+            : [{ prompt: task.description || '', order_index: 0, correct_ids: task.config?.interactive?.correct_ids || [] }];
+          return sortedSteps.map((_, idx) => `${String(task._id)}:${idx}`);
+        });
+      const unansweredTasks = interactiveTaskSteps.filter((key) => !taskResponses[key]);
+      if (unansweredTasks.length > 0) {
+        setMessageType('error');
+        setMessage('Bitte zuerst alle interaktiven Aufgaben beantworten.');
+        return;
+      }
       await persistQuestionnaire();
       await persistCardSort();
       await persistImageRatings();
@@ -260,8 +382,9 @@ export function SessionPage() {
   if (!session || !study) return <div className="splash">Session wird geladen...</div>;
   const isReadOnly = session.status === 'done';
 
-  const orderedModules = study.module_order?.length ? study.module_order : ['questionnaire', 'card_sort', 'image_rating'];
+  const orderedModules = study.module_order?.length ? study.module_order : defaultModulesForStudy(study);
   const modules = orderedModules.filter((m) => {
+    if (m === 'questionnaire') return questions.length > 0;
     if (m === 'card_sort') return cards.length > 0 && cardSortColumns.length > 0;
     if (m === 'image_rating') return images.length > 0;
     return true;
@@ -275,9 +398,17 @@ export function SessionPage() {
     if (col && cardsByColumn[col]) cardsByColumn[col].push(card);
   }
   const unassignedCards = cards.filter((card) => !cardAssignments[card._id]);
+  const customCardsIndexed = customCards.map((item, idx) => ({ ...item, idx }));
+  const unassignedCustomCards = customCardsIndexed.filter((item) => !String(item.column || '').trim());
+  const unassignedCount = unassignedCards.length + unassignedCustomCards.length;
   const getColumnColor = (label) => {
     const index = availableColumns.findIndex((x) => x === label);
-    const palette = ['#f59e0b', '#22c55e', '#0ea5e9', '#ec4899', '#8b5cf6', '#ef4444', '#14b8a6', '#84cc16'];
+    const palette = [
+      '#f8e66b', // classic post-it yellow
+      '#bfe89f', // soft post-it green
+      '#9fd6ff', // soft post-it blue
+      '#ffd3a6', // light peach
+    ];
     return palette[index >= 0 ? index % palette.length : 0];
   };
   const handleDropOnColumn = (event, columnLabel) => {
@@ -285,6 +416,9 @@ export function SessionPage() {
     const adminCardId = event.dataTransfer.getData('application/x-admin-card');
     if (adminCardId) {
       setCardAssignments((prev) => ({ ...prev, [adminCardId]: columnLabel }));
+      if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+      setSnapCardId(adminCardId);
+      snapTimerRef.current = setTimeout(() => setSnapCardId(''), 260);
       return;
     }
     const customIdx = event.dataTransfer.getData('application/x-custom-card');
@@ -292,6 +426,9 @@ export function SessionPage() {
       const idx = Number(customIdx);
       if (Number.isNaN(idx)) return;
       setCustomCards((prev) => prev.map((item, i) => (i === idx ? { ...item, column: columnLabel } : item)));
+      if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+      setSnapCardId(`custom-${idx}`);
+      snapTimerRef.current = setTimeout(() => setSnapCardId(''), 260);
     }
   };
   const handleDropOnUnassigned = (event) => {
@@ -299,6 +436,9 @@ export function SessionPage() {
     const adminCardId = event.dataTransfer.getData('application/x-admin-card');
     if (adminCardId) {
       setCardAssignments((prev) => ({ ...prev, [adminCardId]: '' }));
+      if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+      setSnapCardId(adminCardId);
+      snapTimerRef.current = setTimeout(() => setSnapCardId(''), 260);
       return;
     }
     const customIdx = event.dataTransfer.getData('application/x-custom-card');
@@ -306,6 +446,58 @@ export function SessionPage() {
       const idx = Number(customIdx);
       if (Number.isNaN(idx)) return;
       setCustomCards((prev) => prev.map((item, i) => (i === idx ? { ...item, column: '' } : item)));
+      if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+      setSnapCardId(`custom-${idx}`);
+      snapTimerRef.current = setTimeout(() => setSnapCardId(''), 260);
+    }
+  };
+  const startDragAdminCard = (event, cardId) => {
+    event.dataTransfer.setData('application/x-admin-card', cardId);
+    setDraggedCardId(cardId);
+  };
+  const startDragCustomCard = (event, idx) => {
+    event.dataTransfer.setData('application/x-custom-card', String(idx));
+    setDraggedCardId(`custom-${idx}`);
+  };
+  const endDragAdminCard = () => setDraggedCardId('');
+  const selectAndPersistTaskAnswer = async (task, stepIndex, answerId, allowedIds) => {
+    if (!session || isReadOnly) return;
+    const taskId = String(task._id);
+    const responseKey = `${taskId}:${Number(stepIndex || 0)}`;
+    const current = taskResponses[responseKey] || { selected_ids: [] };
+    const currentIds = Array.isArray(current.selected_ids) ? current.selected_ids : [];
+    const exists = currentIds.includes(answerId);
+    const allowedSet = new Set(allowedIds || []);
+    const selected = (exists ? currentIds.filter((x) => x !== answerId) : [...currentIds, answerId]).filter((x) =>
+      allowedSet.has(x)
+    );
+    setTaskResponses((prev) => ({
+      ...prev,
+      [responseKey]: {
+        ...(prev[responseKey] || {}),
+        selected_ids: selected,
+      },
+    }));
+    try {
+      const result = await researchApi.submitTaskResponse({
+        session_id: session._id,
+        task_id: taskId,
+        step_index: Number(stepIndex || 0),
+        selected_ids: selected,
+      });
+      setTaskResponses((prev) => ({
+        ...prev,
+        [responseKey]: {
+          selected_ids: result.selected_ids || [],
+          is_correct: !!result.is_correct,
+          result_status: result.result_status || 'incorrect',
+        },
+      }));
+      setMessageType(result.is_correct ? 'success' : 'error');
+      setMessage(result.is_correct ? 'Antwort gespeichert: korrekt.' : 'Antwort gespeichert: falsch.');
+    } catch (err) {
+      setMessageType('error');
+      setMessage(err.message || 'Antwort konnte nicht gespeichert werden.');
     }
   };
 
@@ -338,7 +530,170 @@ export function SessionPage() {
         )}
       </CardPanel>
 
-      {activeModule === 'questionnaire' && (
+      {tasks.length > 0 && (
+        <CardPanel>
+          {tasks.map((task) => (
+            <div key={task._id} className="task-view-item">
+              {(() => {
+                const files = getTaskFiles(task);
+                const interactiveIds = Array.isArray(task.config?.interactive?.selectable_ids)
+                  ? task.config.interactive.selectable_ids
+                  : [];
+                const configuredFilePath = String(task.config?.interactive?.file_path || '');
+                const htmlFile = files.find((f) => f.format === 'html' && f.path === configuredFilePath)
+                  || files.find((f) => f.format === 'html' && f.path);
+                const interactiveEnabled = interactiveIds.length > 0 && !!htmlFile?.path;
+                const taskId = String(task._id);
+                const taskSteps = Array.isArray(task.steps) && task.steps.length > 0
+                  ? [...task.steps].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
+                  : [{ prompt: task.description || '', order_index: 0, correct_ids: task.config?.interactive?.correct_ids || [] }];
+                const firstStepText = taskSteps[0]?.prompt || '';
+                const showTaskDescription =
+                  !!String(task.description || '').trim() &&
+                  normalizeTextForCompare(task.description) !== normalizeTextForCompare(firstStepText);
+                const firstOpenStepIdx = taskSteps.findIndex((_, idx) => !taskResponses[`${taskId}:${idx}`]);
+                const defaultStepIdx = firstOpenStepIdx === -1 ? Math.max(taskSteps.length - 1, 0) : firstOpenStepIdx;
+                const stepFromUi = Number(taskActiveStepById[taskId]);
+                const activeStepIdx =
+                  Number.isFinite(stepFromUi) && stepFromUi >= 0 && stepFromUi < taskSteps.length
+                    ? stepFromUi
+                    : defaultStepIdx;
+                const activeStep = taskSteps[activeStepIdx] || { prompt: '' };
+                const responseKey = `${taskId}:${activeStepIdx}`;
+                const selectedIds = Array.isArray(taskResponses[responseKey]?.selected_ids)
+                  ? taskResponses[responseKey].selected_ids
+                  : [];
+                const taskResult = taskResponses[responseKey];
+
+                return (
+                  <>
+              <h4>Aufgabe: {task.title}</h4>
+              {showTaskDescription && <p>Aufgabenbeschreibung: {task.description}</p>}
+              {files.map((file, idx) => (
+                <div key={`${task._id}-file-${idx}`} className="task-file-render">
+                  {file.format === 'pdf' && (
+                    <iframe
+                      title={`task-pdf-${task._id}-${idx}`}
+                      src={`${API_BASE}${file.path}`}
+                      className="task-frame"
+                    />
+                  )}
+                  {file.format === 'html' && !interactiveEnabled && taskHtmlByPath[file.path] && (
+                    <div
+                      className="task-html-interactive"
+                      onClick={(event) => {
+                        const summaryTarget = event.target.closest('details > summary');
+                        if (summaryTarget) {
+                          event.preventDefault();
+                          const currentDetails = summaryTarget.parentElement;
+                          const root = summaryTarget.closest('.task-html-root') || event.currentTarget;
+                          const allDetails = root.querySelectorAll('details');
+                          allDetails.forEach((el) => {
+                            if (el !== currentDetails) el.removeAttribute('open');
+                          });
+                          if (currentDetails.hasAttribute('open')) {
+                            currentDetails.removeAttribute('open');
+                          } else {
+                            currentDetails.setAttribute('open', '');
+                          }
+                          return;
+                        }
+                        const linkTarget = event.target.closest('a[href]');
+                        if (linkTarget) event.preventDefault();
+                      }}
+                      dangerouslySetInnerHTML={{ __html: taskHtmlByPath[file.path] }}
+                    />
+                  )}
+                </div>
+              ))}
+              {interactiveEnabled && htmlFile?.path && (
+                <div className="task-interactive-box">
+                  <p>
+                    <strong>
+                      Schritt {activeStepIdx + 1}{taskSteps.length > 1 ? ` von ${taskSteps.length}` : ''}:
+                    </strong>{' '}
+                    {activeStep?.prompt || '-'}
+                  </p>
+                  {taskSteps.length > 1 && (
+                    <div className="step-nav">
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        disabled={activeStepIdx <= 0}
+                        onClick={() =>
+                          setTaskActiveStepById((prev) => ({ ...prev, [taskId]: Math.max(0, activeStepIdx - 1) }))
+                        }
+                      >
+                        Schritt zurück
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        disabled={activeStepIdx >= taskSteps.length - 1}
+                        onClick={() =>
+                          setTaskActiveStepById((prev) => ({
+                            ...prev,
+                            [taskId]: Math.min(taskSteps.length - 1, activeStepIdx + 1),
+                          }))
+                        }
+                      >
+                        Schritt weiter
+                      </button>
+                    </div>
+                  )}
+                  <small>Klicke direkt in der HTML-Vorschau auf das passende Element.</small>
+                  {taskHtmlByPath[htmlFile.path] && (
+                    <div
+                      className="task-html-interactive"
+                      onClick={async (event) => {
+                        if (isReadOnly) return;
+                        const summaryTarget = event.target.closest('details > summary');
+                        if (summaryTarget) {
+                          event.preventDefault();
+                          const currentDetails = summaryTarget.parentElement;
+                          const root = summaryTarget.closest('.task-html-root') || event.currentTarget;
+                          const allDetails = root.querySelectorAll('details');
+                          allDetails.forEach((el) => {
+                            if (el !== currentDetails) el.removeAttribute('open');
+                          });
+                          if (currentDetails.hasAttribute('open')) {
+                            currentDetails.removeAttribute('open');
+                          } else {
+                            currentDetails.setAttribute('open', '');
+                          }
+                          return;
+                        }
+                        const dataTarget = event.target.closest('[data-answer-id]');
+                        const linkTarget = event.target.closest('a[href]');
+                        if (!dataTarget && !linkTarget) return;
+                        if (linkTarget) event.preventDefault();
+                        const answerId = dataTarget
+                          ? String(dataTarget.getAttribute('data-answer-id') || '').trim()
+                          : String(linkTarget.getAttribute('href') || '').trim();
+                        if (!answerId || !interactiveIds.includes(answerId)) return;
+                        await selectAndPersistTaskAnswer(task, activeStepIdx, answerId, interactiveIds);
+                      }}
+                      dangerouslySetInnerHTML={{ __html: taskHtmlByPath[htmlFile.path] }}
+                    />
+                  )}
+                  {taskResult && (
+                    <p
+                      className={taskResult.is_correct ? 'info-text success' : 'info-text error'}
+                    >
+                      {taskResult.is_correct ? 'Ergebnis: korrekt' : 'Ergebnis: falsch'}
+                    </p>
+                  )}
+                </div>
+              )}
+                  </>
+                );
+              })()}
+            </div>
+          ))}
+        </CardPanel>
+      )}
+
+      {modules.includes('questionnaire') && activeModule === 'questionnaire' && (
         <CardPanel title={isReadOnly ? 'Interview ansehen' : 'Interview bearbeiten'}>
           {questions.length === 0 && <p>Keine Fragen vorhanden.</p>}
           {questions.map((q) => (
@@ -355,7 +710,7 @@ export function SessionPage() {
         </CardPanel>
       )}
 
-      {activeModule === 'card_sort' && (
+      {modules.includes('card_sort') && activeModule === 'card_sort' && (
         <CardPanel title={isReadOnly ? 'Card Sorting ansehen' : 'Card Sorting bearbeiten'}>
           {cards.length === 0 && <p>Keine Cards vorhanden.</p>}
           {cardSortColumns.length === 0 && <p>Keine vordefinierten Spalten vorhanden. Admin muss Spalten anlegen.</p>}
@@ -366,17 +721,34 @@ export function SessionPage() {
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDropOnUnassigned}
               >
-                <h4>Nicht zugeordnete Cards</h4>
+                <h4>{unassignedCount === 0 ? 'Alle Cards zugeordnet' : 'Nicht zugeordnete Cards'}</h4>
                 <div className="postit-wrap">
                   {unassignedCards.map((c) => (
                     <button
                       key={c._id}
                       type="button"
-                      className="postit-card bw"
+                      className={`postit-card bw ${draggedCardId === c._id ? 'is-dragging' : ''} ${
+                        snapCardId === c._id ? 'is-snap' : ''
+                      }`}
                       draggable={!isReadOnly}
-                      onDragStart={(e) => e.dataTransfer.setData('application/x-admin-card', c._id)}
+                      onDragStart={(e) => startDragAdminCard(e, c._id)}
+                      onDragEnd={endDragAdminCard}
                     >
                       {c.label}
+                    </button>
+                  ))}
+                  {unassignedCustomCards.map((item) => (
+                    <button
+                      key={`custom-unassigned-${item.idx}`}
+                      type="button"
+                      className={`postit-card bw ${draggedCardId === `custom-${item.idx}` ? 'is-dragging' : ''} ${
+                        snapCardId === `custom-${item.idx}` ? 'is-snap' : ''
+                      }`}
+                      draggable={!isReadOnly}
+                      onDragStart={(e) => startDragCustomCard(e, item.idx)}
+                      onDragEnd={endDragAdminCard}
+                    >
+                      {item.label}
                     </button>
                   ))}
                 </div>
@@ -401,14 +773,34 @@ export function SessionPage() {
                           <button
                             key={c._id}
                             type="button"
-                            className="postit-card colored"
-                            style={{ background: color }}
+                            className={`postit-card colored ${draggedCardId === c._id ? 'is-dragging' : ''} ${
+                              snapCardId === c._id ? 'is-snap' : ''
+                            }`}
+                            style={{ '--postit-color': color }}
                             draggable={!isReadOnly}
-                            onDragStart={(e) => e.dataTransfer.setData('application/x-admin-card', c._id)}
+                            onDragStart={(e) => startDragAdminCard(e, c._id)}
+                            onDragEnd={endDragAdminCard}
                           >
                             {c.label}
                           </button>
                         ))}
+                        {customCardsIndexed
+                          .filter((item) => String(item.column || '').trim() === col)
+                          .map((item) => (
+                            <button
+                              key={`custom-assigned-${col}-${item.idx}`}
+                              type="button"
+                              className={`postit-card colored ${draggedCardId === `custom-${item.idx}` ? 'is-dragging' : ''} ${
+                                snapCardId === `custom-${item.idx}` ? 'is-snap' : ''
+                              }`}
+                              style={{ '--postit-color': color }}
+                              draggable={!isReadOnly}
+                              onDragStart={(e) => startDragCustomCard(e, item.idx)}
+                              onDragEnd={endDragAdminCard}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
                       </div>
                     </section>
                   );
@@ -453,12 +845,6 @@ export function SessionPage() {
                         onChange={(e) => setCustomCardLabel(e.target.value)}
                         placeholder="Eigene Card benennen"
                       />
-                      <select value={customCardColumn} onChange={(e) => setCustomCardColumn(e.target.value)}>
-                        <option value="">Spalte wählen</option>
-                        {availableColumns.map((label) => (
-                          <option key={`custom-${label}`} value={label}>{label}</option>
-                        ))}
-                      </select>
                       <button
                         type="button"
                         className="ghost-btn"
@@ -470,9 +856,8 @@ export function SessionPage() {
                             setMessage(`Maximal ${maxCustomCards} eigene Cards möglich.`);
                             return;
                           }
-                          setCustomCards([...customCards, { label, column: customCardColumn || '' }]);
+                          setCustomCards([...customCards, { label, column: '' }]);
                           setCustomCardLabel('');
-                          setCustomCardColumn('');
                         }}
                       >
                         Card hinzufügen
@@ -493,20 +878,7 @@ export function SessionPage() {
                   <div className="custom-card-list">
                     {customCards.map((item, idx) => (
                       <div key={`${item.label}-${idx}`} className="list-row">
-                        <span>{item.label} {item.column ? `→ ${item.column}` : '(nicht zugeordnet)'}</span>
-                        {!isReadOnly && (
-                          <select
-                            value={item.column || ''}
-                            onChange={(e) =>
-                              setCustomCards(customCards.map((x, i) => (i === idx ? { ...x, column: e.target.value } : x)))
-                            }
-                          >
-                            <option value="">Spalte wählen</option>
-                            {availableColumns.map((label) => (
-                              <option key={`cc-${idx}-${label}`} value={label}>{label}</option>
-                            ))}
-                          </select>
-                        )}
+                        <span>{item.label} {item.column ? `→ ${item.column}` : '(in Nicht zugeordnete Cards)'}</span>
                         {!isReadOnly && (
                           <button
                             type="button"
@@ -527,13 +899,13 @@ export function SessionPage() {
         </CardPanel>
       )}
 
-      {activeModule === 'image_rating' && (
+      {modules.includes('image_rating') && activeModule === 'image_rating' && (
         <CardPanel title={isReadOnly ? 'Bildbewertung ansehen' : 'Bildbewertung bearbeiten'}>
           {images.length === 0 && <p>Keine Bilder vorhanden.</p>}
           {images.map((img) => (
             <div className="image-row" key={img._id}>
               <img
-                src={`http://localhost:4000/uploads/${String(img.path || '').split('/').pop()}`}
+                src={`${API_BASE}/uploads/${String(img.path || '').split('/').pop()}`}
                 alt={img.alt_text || 'image'}
               />
               <div className="image-fields">

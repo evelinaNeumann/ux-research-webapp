@@ -6,12 +6,38 @@ const researchTaskSchema = new mongoose.Schema(
     page_node_id: { type: mongoose.Schema.Types.ObjectId, ref: 'PageTreeNode', default: null },
     title: { type: String, required: true },
     description: { type: String, default: '' },
+    steps: {
+      type: [
+        {
+          prompt: { type: String, required: true },
+          order_index: { type: Number, default: 0 },
+          correct_ids: { type: [String], default: [] },
+        },
+      ],
+      default: [],
+    },
     task_type: {
       type: String,
       enum: ['instruction', 'question_block', 'cardsort_block', 'image_block', 'mixed'],
       required: true,
     },
     config: { type: Object, default: {} },
+    content_format: { type: String, enum: ['none', 'pdf', 'html'], default: 'none' },
+    attachment_path: { type: String, default: '' },
+    attachment_name: { type: String, default: '' },
+    attachment_mime: { type: String, default: '' },
+    attachments: {
+      type: [
+        {
+          path: { type: String, required: true },
+          name: { type: String, required: true },
+          mime: { type: String, default: '' },
+          format: { type: String, enum: ['pdf', 'html'], required: true },
+          uploaded_at: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
     order_index: { type: Number, default: 0 },
     is_required: { type: Boolean, default: false },
     version: { type: Number, default: 1 },

@@ -13,12 +13,13 @@ const studySchema = new mongoose.Schema(
     inherit_user_profile_points: { type: Boolean, default: false },
     type: {
       type: String,
-      enum: ['questionnaire', 'card_sort', 'image_rating', 'mixed'],
+      enum: ['questionnaire', 'card_sort', 'image_rating', 'task_work', 'mixed'],
       default: 'mixed',
       index: true,
     },
     version: { type: Number, default: 1 },
     is_active: { type: Boolean, default: true, index: true },
+    assign_to_all_users: { type: Boolean, default: false, index: true },
     module_order: {
       type: [String],
       default: ['questionnaire', 'card_sort', 'image_rating'],

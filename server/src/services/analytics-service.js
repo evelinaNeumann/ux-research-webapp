@@ -1,10 +1,14 @@
 import { Answer } from '../models/Answer.js';
 import { ImageRating } from '../models/ImageRating.js';
+import { ImageAsset } from '../models/ImageAsset.js';
 import { CardSort } from '../models/CardSort.js';
 import { Session } from '../models/Session.js';
 import { Question } from '../models/Question.js';
 import { UserStudyProfile } from '../models/UserStudyProfile.js';
 import { Card } from '../models/Card.js';
+import { CardSortColumn } from '../models/CardSortColumn.js';
+import { ResearchTask } from '../models/ResearchTask.js';
+import { TaskResponse } from '../models/TaskResponse.js';
 import mongoose from 'mongoose';
 
 function buildSessionMatch(filters = {}) {
@@ -74,8 +78,14 @@ export async function analyticsOverview(filters = {}) {
       sessions_done: 0,
       completion_rate: 0,
       questionnaire: [],
+      questionnaire_questions_total: 0,
       image_rating: [],
+      image_assets_total: 0,
       card_sort_submissions: 0,
+      task_work: {
+        submissions_total: 0,
+        tasks: [],
+      },
     };
   }
   const [sessionsTotal, sessionsDone] = await Promise.all([
@@ -158,8 +168,9 @@ export async function analyticsOverview(filters = {}) {
   const cardSortMatch = filters.studyId ? { study_id: studyMatch } : {};
   if (filteredUserIds) cardSortMatch.user_id = { $in: filteredUserIds };
   const cardsortCount = await CardSort.countDocuments(cardSortMatch);
-  const [studyCards, latestCardSortBySession] = await Promise.all([
+  const [studyCards, cardSortColumnsTotal, latestCardSortBySession] = await Promise.all([
     Card.find(filters.studyId ? { study_id: studyMatch } : {}, { _id: 1, label: 1 }).lean(),
+    CardSortColumn.countDocuments(filters.studyId ? { study_id: studyMatch, is_active: true } : { is_active: true }),
     CardSort.aggregate([
       { $match: cardSortMatch },
       { $sort: { created_at: -1, _id: -1 } },
@@ -245,6 +256,8 @@ export async function analyticsOverview(filters = {}) {
   const cardSort = {
     submissions_total: cardsortCount,
     latest_session_submissions: latestCardSortBySession.length,
+    configured_cards_total: studyCards.length,
+    configured_columns_total: cardSortColumnsTotal,
     column_distribution: toSortedRows(columnDist, 'column'),
     column_card_distribution: columnCardDistribution,
     card_column_distribution: cardColumnDistribution,
@@ -258,14 +271,65 @@ export async function analyticsOverview(filters = {}) {
     },
   };
 
+  const taskMatch = filters.studyId ? { study_id: studyMatch } : {};
+  if (filteredUserIds) taskMatch.user_id = { $in: filteredUserIds };
+  const [imageAssetsTotal, taskDefs, taskResponses] = await Promise.all([
+    ImageAsset.countDocuments(filters.studyId ? { study_id: studyMatch } : {}),
+    ResearchTask.find(filters.studyId ? { study_id: studyMatch } : {}, { _id: 1, title: 1, description: 1, steps: 1 })
+      .sort({ order_index: 1, _id: 1 })
+      .lean(),
+    TaskResponse.find(taskMatch, { task_id: 1, step_index: 1, is_correct: 1 }).lean(),
+  ]);
+  const responsesByTaskStep = new Map();
+  for (const row of taskResponses) {
+    const key = `${String(row.task_id)}:${Number(row.step_index || 0)}`;
+    if (!responsesByTaskStep.has(key)) responsesByTaskStep.set(key, []);
+    responsesByTaskStep.get(key).push(row);
+  }
+  const taskItems = taskDefs.map((task) => {
+    const steps = Array.isArray(task.steps) && task.steps.length > 0
+      ? [...task.steps].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
+      : [{ prompt: task.description || '', order_index: 0 }];
+    const stepStats = steps.map((step, idx) => {
+      const key = `${String(task._id)}:${idx}`;
+      const rows = responsesByTaskStep.get(key) || [];
+      const total = rows.length;
+      const correct = rows.filter((x) => !!x.is_correct).length;
+      const incorrect = total - correct;
+      return {
+        step_index: idx,
+        prompt: String(step?.prompt || '').trim() || `Schritt ${idx + 1}`,
+        total,
+        correct,
+        incorrect,
+        correct_rate: total > 0 ? Number(((correct / total) * 100).toFixed(2)) : 0,
+      };
+    });
+    return {
+      task_id: String(task._id),
+      title: task.title || String(task._id),
+      steps: stepStats,
+      total: stepStats.reduce((sum, s) => sum + (s.total || 0), 0),
+      correct: stepStats.reduce((sum, s) => sum + (s.correct || 0), 0),
+      incorrect: stepStats.reduce((sum, s) => sum + (s.incorrect || 0), 0),
+    };
+  });
+  const taskWork = {
+    submissions_total: taskResponses.length,
+    tasks: taskItems,
+  };
+
   return {
     sessions_total: sessionsTotal,
     sessions_done: sessionsDone,
     completion_rate: sessionsTotal ? Number(((sessionsDone / sessionsTotal) * 100).toFixed(2)) : 0,
     questionnaire,
+    questionnaire_questions_total: questionDocs.length,
     image_rating: imageAvg,
+    image_assets_total: imageAssetsTotal,
     card_sort_submissions: cardsortCount,
     card_sort: cardSort,
+    task_work: taskWork,
   };
 }
 
@@ -318,6 +382,27 @@ export function flattenExport(overview, filters = {}) {
       n: img.n,
       dateRange: `${filters.dateFrom || ''}..${filters.dateTo || ''}`,
     });
+  }
+
+  for (const task of overview.task_work?.tasks || []) {
+    for (const step of task.steps || []) {
+      rows.push({
+        studyId: filters.studyId || '',
+        studyVersion: '',
+        moduleType: 'task_work',
+        questionId: `${task.task_id}:${step.step_index}`,
+        questionText: `${task.title} - Schritt ${step.step_index + 1}`,
+        metricType: 'step_submissions',
+        value: step.prompt || '',
+        count: step.total || 0,
+        correct: step.correct || 0,
+        incorrect: step.incorrect || 0,
+        correctRate: step.correct_rate || 0,
+        group: filters.testGroup || '',
+        n: step.total || 0,
+        dateRange: `${filters.dateFrom || ''}..${filters.dateTo || ''}`,
+      });
+    }
   }
 
   return rows;

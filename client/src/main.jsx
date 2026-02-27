@@ -23,7 +23,7 @@ function Root() {
   if (!ready) return <div className="splash">Loading...</div>;
 
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <App user={user} setUser={setUser} />
     </BrowserRouter>
   );

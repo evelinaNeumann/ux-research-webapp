@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CardPanel } from '../components/CardPanel';
 import { adminApi } from '../api/admin';
 import './AdminUsersPage.css';
@@ -8,19 +8,43 @@ export function AdminUsersPage() {
   const [profilesByUser, setProfilesByUser] = useState({});
   const [openUserId, setOpenUserId] = useState('');
   const [error, setError] = useState('');
+  const handlingResetPromptsRef = useRef(false);
 
-  const loadUsers = async () => {
+  const handlePendingResetRequests = async () => {
+    if (handlingResetPromptsRef.current) return;
+    handlingResetPromptsRef.current = true;
+    try {
+      const pending = await adminApi.listPasswordResetRequests();
+      if (!Array.isArray(pending) || pending.length === 0) return;
+      for (const user of pending) {
+        const username = user?.username || 'unbekannt';
+        const ok = window.confirm(`User "${username}" Passwort neu vergeben erlauben?`);
+        await adminApi.decidePasswordResetRequest(user._id, ok ? 'approve' : 'deny');
+      }
+      const usersRes = await adminApi.listUsers();
+      setUsers(usersRes || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      handlingResetPromptsRef.current = false;
+    }
+  };
+
+  const loadUsers = async (showResetPopups = false) => {
     try {
       const usersRes = await adminApi.listUsers();
       setUsers(usersRes || []);
       setError('');
+      if (showResetPopups) {
+        await handlePendingResetRequests();
+      }
     } catch (err) {
       setError(err.message);
     }
   };
 
   useEffect(() => {
-    loadUsers();
+    loadUsers(true);
   }, []);
 
   const loadProfiles = async (userId) => {
@@ -72,7 +96,7 @@ export function AdminUsersPage() {
                     const ok = window.confirm(`Nutzer ${u.username} wirklich löschen?`);
                     if (!ok) return;
                     await adminApi.deleteUser(u._id);
-                    await loadUsers();
+                    await loadUsers(false);
                   }}
                 >
                   Löschen

@@ -36,13 +36,18 @@ export function AdminPage() {
   const [cardLabel, setCardLabel] = useState('');
   const [cardSortColumnLabel, setCardSortColumnLabel] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [taskCorrectIds, setTaskCorrectIds] = useState('');
   const [profileCardLabel, setProfileCardLabel] = useState('');
   const [items, setItems] = useState({ questions: [], cards: [], tasks: [] });
   const [profileCards, setProfileCards] = useState([]);
   const [cardSortColumns, setCardSortColumns] = useState([]);
+  const [taskUploadFiles, setTaskUploadFiles] = useState({});
+  const [taskDragOverId, setTaskDragOverId] = useState('');
   const [studyManagementOpen, setStudyManagementOpen] = useState(true);
   const [assignmentOpen, setAssignmentOpen] = useState(true);
   const [contentConfigOpen, setContentConfigOpen] = useState(true);
+  const [profileWordsEditMode, setProfileWordsEditMode] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
   const showSuccess = (text) => setFeedback({ type: 'success', text });
@@ -107,6 +112,10 @@ export function AdminPage() {
     () => studies.find((s) => s._id === selectedStudy) || null,
     [studies, selectedStudy]
   );
+  const selectedAssignmentStudyData = useMemo(
+    () => studies.find((s) => s._id === selectedAssignmentStudy) || null,
+    [studies, selectedAssignmentStudy]
+  );
 
   useEffect(() => {
     if (!selectedStudyData) {
@@ -145,6 +154,10 @@ export function AdminPage() {
     () => selectedStudyData?.name || 'Keine Studie',
     [selectedStudyData]
   );
+  const selectedStudyType = selectedStudyData?.type || 'mixed';
+  const showInterviewConfig = selectedStudyType === 'mixed' || selectedStudyType === 'questionnaire';
+  const showCardSortConfig = selectedStudyType === 'mixed' || selectedStudyType === 'card_sort';
+  const showTaskConfig = selectedStudyType === 'mixed' || selectedStudyType === 'task_work';
 
   const handleDroppedFile = (file) => {
     if (!file) return;
@@ -159,6 +172,13 @@ export function AdminPage() {
   const studyPdfUrl = selectedStudyData?.brief_pdf_path
     ? `${API_BASE}${selectedStudyData.brief_pdf_path}`
     : '';
+  const isTaskFileAllowed = (file) => {
+    if (!file) return false;
+    const name = String(file.name || '').toLowerCase();
+    const isPdf = file.type === 'application/pdf' || name.endsWith('.pdf');
+    const isHtml = file.type === 'text/html' || file.type === 'application/xhtml+xml' || name.endsWith('.html') || name.endsWith('.htm');
+    return isPdf || isHtml;
+  };
 
   return (
     <div className="admin-shell">
@@ -187,6 +207,7 @@ export function AdminPage() {
                   <option value="questionnaire">Interview</option>
                   <option value="card_sort">card_sort</option>
                   <option value="image_rating">image_rating</option>
+                  <option value="task_work">Aufgabenbearbeitung</option>
                 </select>
               </label>
               <label className="form-field study-description-field">
@@ -294,6 +315,7 @@ export function AdminPage() {
                   <option value="questionnaire">Interview</option>
                   <option value="card_sort">card_sort</option>
                   <option value="image_rating">image_rating</option>
+                  <option value="task_work">Aufgabenbearbeitung</option>
                 </select>
               </label>
               <label className="form-field study-description-field">
@@ -480,6 +502,10 @@ export function AdminPage() {
         </div>
         {assignmentOpen && (
           <>
+            <p className="hint">
+              Automatische Zuweisung für neue Nutzer:{' '}
+              <strong>{selectedAssignmentStudyData?.assign_to_all_users ? 'Aktiv' : 'Inaktiv'}</strong>
+            </p>
             <div className="assign-toolbar">
               <label className="form-field">
                 <span>Studie</span>
@@ -512,6 +538,42 @@ export function AdminPage() {
                 }}
               >
                 Zur Studie zuweisen
+              </button>
+              <button
+                className="ghost-btn"
+                onClick={async () => {
+                  try {
+                    if (!selectedAssignmentStudy) return;
+                    await adminApi.assignStudyToAllUsers(selectedAssignmentStudy);
+                    const [list, assigned] = await Promise.all([
+                      refreshStudies(),
+                      adminApi.listAssignments(selectedAssignmentStudy),
+                    ]);
+                    setStudies(list);
+                    setAssignments(assigned || []);
+                    showSuccess('Studie wurde allen Nutzern zugewiesen (inkl. zukünftiger Registrierungen).');
+                  } catch (err) {
+                    showError(err.message || 'Globale Zuweisung fehlgeschlagen.');
+                  }
+                }}
+              >
+                Studie an alle Nutzer zuweisen
+              </button>
+              <button
+                className="ghost-btn"
+                onClick={async () => {
+                  try {
+                    if (!selectedAssignmentStudy) return;
+                    await adminApi.disableAssignStudyToAllUsers(selectedAssignmentStudy);
+                    const list = await refreshStudies();
+                    setStudies(list);
+                    showSuccess('Automatische Zuweisung für neue Nutzer deaktiviert.');
+                  } catch (err) {
+                    showError(err.message || 'Deaktivieren fehlgeschlagen.');
+                  }
+                }}
+              >
+                Auto-Zuweisung deaktivieren
               </button>
             </div>
             {assignments.map((a) => (
@@ -560,8 +622,84 @@ export function AdminPage() {
         )}
       </CardPanel>
 
-      {contentConfigOpen && <div className="admin-grid">
-        <CardPanel title="Fragen">
+      {contentConfigOpen && <div className="content-config-layout">
+        <div className="content-row">
+          <CardPanel title="Profil-Card-Wörter (max. 8)">
+            <FormField
+              label="Profil-Wort"
+              value={profileCardLabel}
+              onChange={(e) => setProfileCardLabel(e.target.value)}
+            />
+            <button
+              className="primary-btn"
+              onClick={async () => {
+                try {
+                  if (!selectedStudy) return;
+                  await adminApi.createProfileCard(selectedStudy, { label: profileCardLabel });
+                  setProfileCardLabel('');
+                  await loadContent(selectedStudy);
+                  showSuccess('Profil-Wort erfolgreich erstellt.');
+                } catch (err) {
+                  showError(err.message || 'Profil-Wort konnte nicht erstellt werden.');
+                }
+              }}
+            >
+              Profil-Wort hinzufügen
+            </button>
+            <small>{profileCards.length}/8 angelegt</small>
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => setProfileWordsEditMode((v) => !v)}
+            >
+              {profileWordsEditMode ? 'Bearbeiten beenden' : 'Wörter bearbeiten'}
+            </button>
+            <div className="profile-word-list">
+              {profileCards.map((p) => (
+                <div key={p._id} className="profile-word-item">
+                  <div className="chip">{p.label}</div>
+                  {profileWordsEditMode && (
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={async () => {
+                          try {
+                            const label = window.prompt('Profil-Wort bearbeiten', p.label);
+                            if (!label || label.trim() === p.label) return;
+                            await adminApi.updateProfileCard(p._id, { label: label.trim() });
+                            await loadContent(selectedStudy);
+                            showSuccess('Profil-Wort erfolgreich gespeichert.');
+                          } catch (err) {
+                            showError(err.message || 'Speichern fehlgeschlagen.');
+                          }
+                        }}
+                      >
+                        Bearbeiten
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-btn"
+                        onClick={async () => {
+                          const ok = window.confirm('Profil-Wort wirklich löschen?');
+                          if (!ok) return;
+                          await adminApi.deleteProfileCard(p._id);
+                          await loadContent(selectedStudy);
+                        }}
+                      >
+                        Löschen
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardPanel>
+        </div>
+
+        {showInterviewConfig && (
+        <div className="content-row">
+          <CardPanel title="Fragen">
           <FormField label="Frage" value={questionText} onChange={(e) => setQuestionText(e.target.value)} />
           <button
             className="primary-btn"
@@ -614,135 +752,188 @@ export function AdminPage() {
               </div>
             </div>
           ))}
-        </CardPanel>
+          </CardPanel>
+        </div>
+        )}
 
-        <CardPanel title="Cards">
-          <FormField label="Card Label" value={cardLabel} onChange={(e) => setCardLabel(e.target.value)} />
-          <button
-            className="primary-btn"
-            onClick={async () => {
-              try {
-                await adminApi.createCard(selectedStudy, { label: cardLabel });
-                setCardLabel('');
-                await loadContent(selectedStudy);
-                showSuccess('Card erfolgreich erstellt.');
-              } catch (err) {
-                showError(err.message || 'Card konnte nicht erstellt werden.');
-              }
-            }}
-          >
-            Card hinzufügen
-          </button>
-          {items.cards.map((c) => (
-            <div key={c._id} className="item-row">
-              <div className="chip">{c.label}</div>
-              <div className="row-actions">
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={async () => {
-                    try {
-                      const label = window.prompt('Card bearbeiten', c.label);
-                      if (!label || label.trim() === c.label) return;
-                      await adminApi.updateCard(c._id, { label: label.trim() });
+        {showCardSortConfig && (
+        <div className="content-row content-row-two-col">
+          <CardPanel title="Cards">
+            <FormField label="Card Label" value={cardLabel} onChange={(e) => setCardLabel(e.target.value)} />
+            <button
+              className="primary-btn"
+              onClick={async () => {
+                try {
+                  await adminApi.createCard(selectedStudy, { label: cardLabel });
+                  setCardLabel('');
+                  await loadContent(selectedStudy);
+                  showSuccess('Card erfolgreich erstellt.');
+                } catch (err) {
+                  showError(err.message || 'Card konnte nicht erstellt werden.');
+                }
+              }}
+            >
+              Card hinzufügen
+            </button>
+            {items.cards.map((c) => (
+              <div key={c._id} className="item-row">
+                <div className="chip">{c.label}</div>
+                <div className="row-actions">
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={async () => {
+                      try {
+                        const label = window.prompt('Card bearbeiten', c.label);
+                        if (!label || label.trim() === c.label) return;
+                        await adminApi.updateCard(c._id, { label: label.trim() });
+                        await loadContent(selectedStudy);
+                        showSuccess('Card erfolgreich gespeichert.');
+                      } catch (err) {
+                        showError(err.message || 'Speichern fehlgeschlagen.');
+                      }
+                    }}
+                  >
+                    Bearbeiten
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-btn"
+                    onClick={async () => {
+                      const ok = window.confirm('Card wirklich löschen?');
+                      if (!ok) return;
+                      await adminApi.deleteCard(c._id);
                       await loadContent(selectedStudy);
-                      showSuccess('Card erfolgreich gespeichert.');
-                    } catch (err) {
-                      showError(err.message || 'Speichern fehlgeschlagen.');
-                    }
-                  }}
-                >
-                  Bearbeiten
-                </button>
-                <button
-                  type="button"
-                  className="danger-btn"
-                  onClick={async () => {
-                    const ok = window.confirm('Card wirklich löschen?');
-                    if (!ok) return;
-                    await adminApi.deleteCard(c._id);
-                    await loadContent(selectedStudy);
-                  }}
-                >
-                  Löschen
-                </button>
+                    }}
+                  >
+                    Löschen
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </CardPanel>
+            ))}
+          </CardPanel>
 
-        <CardPanel title="Card-Sorting-Spalten">
-          <FormField
-            label="Spaltenname"
-            value={cardSortColumnLabel}
-            onChange={(e) => setCardSortColumnLabel(e.target.value)}
-          />
-          <button
-            className="primary-btn"
-            onClick={async () => {
-              try {
-                if (!selectedStudy) return;
-                await adminApi.createCardSortColumn(selectedStudy, { label: cardSortColumnLabel });
-                setCardSortColumnLabel('');
-                await loadContent(selectedStudy);
-                showSuccess('Spalte erfolgreich erstellt.');
-              } catch (err) {
-                showError(err.message || 'Spalte konnte nicht erstellt werden.');
-              }
-            }}
-          >
-            Spalte hinzufügen
-          </button>
-          {cardSortColumns.map((col) => (
-            <div key={col._id} className="item-row">
-              <div className="chip">{col.label}</div>
-              <div className="row-actions">
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={async () => {
-                    try {
-                      const label = window.prompt('Spalte bearbeiten', col.label);
-                      if (!label || label.trim() === col.label) return;
-                      await adminApi.updateCardSortColumn(col._id, { label: label.trim() });
+          <CardPanel title="Card-Sorting-Spalten">
+            <FormField
+              label="Spaltenname"
+              value={cardSortColumnLabel}
+              onChange={(e) => setCardSortColumnLabel(e.target.value)}
+            />
+            <button
+              className="primary-btn"
+              onClick={async () => {
+                try {
+                  if (!selectedStudy) return;
+                  await adminApi.createCardSortColumn(selectedStudy, { label: cardSortColumnLabel });
+                  setCardSortColumnLabel('');
+                  await loadContent(selectedStudy);
+                  showSuccess('Spalte erfolgreich erstellt.');
+                } catch (err) {
+                  showError(err.message || 'Spalte konnte nicht erstellt werden.');
+                }
+              }}
+            >
+              Spalte hinzufügen
+            </button>
+            {cardSortColumns.map((col) => (
+              <div key={col._id} className="item-row">
+                <div className="chip">{col.label}</div>
+                <div className="row-actions">
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={async () => {
+                      try {
+                        const label = window.prompt('Spalte bearbeiten', col.label);
+                        if (!label || label.trim() === col.label) return;
+                        await adminApi.updateCardSortColumn(col._id, { label: label.trim() });
+                        await loadContent(selectedStudy);
+                        showSuccess('Spalte erfolgreich gespeichert.');
+                      } catch (err) {
+                        showError(err.message || 'Speichern fehlgeschlagen.');
+                      }
+                    }}
+                  >
+                    Bearbeiten
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-btn"
+                    onClick={async () => {
+                      const ok = window.confirm('Spalte wirklich löschen?');
+                      if (!ok) return;
+                      await adminApi.deleteCardSortColumn(col._id);
                       await loadContent(selectedStudy);
-                      showSuccess('Spalte erfolgreich gespeichert.');
-                    } catch (err) {
-                      showError(err.message || 'Speichern fehlgeschlagen.');
-                    }
-                  }}
-                >
-                  Bearbeiten
-                </button>
-                <button
-                  type="button"
-                  className="danger-btn"
-                  onClick={async () => {
-                    const ok = window.confirm('Spalte wirklich löschen?');
-                    if (!ok) return;
-                    await adminApi.deleteCardSortColumn(col._id);
-                    await loadContent(selectedStudy);
-                  }}
-                >
-                  Löschen
-                </button>
+                    }}
+                  >
+                    Löschen
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </CardPanel>
+            ))}
+          </CardPanel>
+        </div>
+        )}
 
-        <CardPanel title="Aufgaben">
+        {showTaskConfig && (
+        <div className="content-row">
+          <CardPanel title="Aufgaben">
           <FormField label="Task Titel" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
+          <label className="form-field task-description-field">
+            <span>Aufgabenstellung</span>
+            <textarea
+              rows={4}
+              value={taskDescription}
+              onChange={(e) => setTaskDescription(e.target.value)}
+              placeholder="Aufgabe formulieren"
+            />
+          </label>
+          <FormField
+            label="Richtige Antwort-IDs (Komma-getrennt)"
+            value={taskCorrectIds}
+            onChange={(e) => setTaskCorrectIds(e.target.value)}
+          />
+          <small>
+            Für HTML-Interaktion: Nutze im HTML `data-answer-id="..."` an klickbaren Elementen.
+            Die HTML-Datei kann nach Upload pro Aufgabe ausgewählt werden.
+          </small>
           <button
             className="primary-btn"
             onClick={async () => {
               try {
+                const title = taskTitle.trim();
+                if (!title) {
+                  showError('Bitte Task Titel eingeben.');
+                  return;
+                }
                 await adminApi.createTask(selectedStudy, {
-                  title: taskTitle,
-                  description: '',
+                  title,
+                  description: taskDescription.trim(),
                   task_type: 'instruction',
+                  steps: taskDescription.trim()
+                    ? [
+                        {
+                          prompt: taskDescription.trim(),
+                          order_index: 0,
+                          correct_ids: taskCorrectIds
+                            .split(',')
+                            .map((x) => x.trim())
+                            .filter(Boolean),
+                        },
+                      ]
+                    : [],
+                  config: {
+                    interactive: {
+                      correct_ids: taskCorrectIds
+                        .split(',')
+                        .map((x) => x.trim())
+                        .filter(Boolean),
+                    },
+                  },
                 });
                 setTaskTitle('');
+                setTaskDescription('');
+                setTaskCorrectIds('');
                 await loadContent(selectedStudy);
                 showSuccess('Aufgabe erfolgreich erstellt.');
               } catch (err) {
@@ -752,104 +943,353 @@ export function AdminPage() {
           >
             Task hinzufügen
           </button>
-          {items.tasks.map((t) => (
-            <div key={t._id} className="item-row">
-              <div className="chip">{t.title}</div>
-              <div className="row-actions">
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={async () => {
-                    try {
-                      const title = window.prompt('Aufgabe bearbeiten', t.title);
-                      if (!title || title.trim() === t.title) return;
-                      await adminApi.updateTask(t._id, { title: title.trim() });
-                      await loadContent(selectedStudy);
-                      showSuccess('Aufgabe erfolgreich gespeichert.');
-                    } catch (err) {
-                      showError(err.message || 'Speichern fehlgeschlagen.');
-                    }
-                  }}
-                >
-                  Bearbeiten
-                </button>
-                <button
-                  type="button"
-                  className="danger-btn"
-                  onClick={async () => {
-                    const ok = window.confirm('Aufgabe wirklich löschen?');
-                    if (!ok) return;
-                    await adminApi.deleteTask(t._id);
-                    await loadContent(selectedStudy);
-                  }}
-                >
-                  Löschen
-                </button>
-              </div>
-            </div>
-          ))}
-        </CardPanel>
+          {items.tasks.map((t) => {
+            const taskFiles = t.attachments?.length > 0
+              ? t.attachments
+              : t.attachment_name
+                ? [{ path: t.attachment_path, name: t.attachment_name, format: t.content_format }]
+                : [];
+            const htmlFiles = taskFiles.filter((file) => file.format === 'html');
+            const selectedHtmlPath = String(t.config?.interactive?.file_path || '');
+            const taskSteps = Array.isArray(t.steps)
+              ? [...t.steps].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
+              : [];
+            return (
+              <div key={t._id} className="task-item">
+                <div className="item-row">
+                  <div>
+                    <div className="chip">{t.title}</div>
+                    {t.description && <small className="task-file-meta">{t.description}</small>}
+                  </div>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={async () => {
+                        try {
+                          const title = window.prompt('Aufgabe bearbeiten', t.title);
+                          if (!title) return;
+                          const description = window.prompt('Aufgabenstellung bearbeiten', t.description || '');
+                          if (description === null) return;
+                          const correct = window.prompt(
+                            'Richtige Antwort-IDs bearbeiten (Komma-getrennt)',
+                            Array.isArray(t.config?.interactive?.correct_ids)
+                              ? t.config.interactive.correct_ids.join(', ')
+                              : ''
+                          );
+                          if (correct === null) return;
+                          const nextCorrect = correct.split(',').map((x) => x.trim()).filter(Boolean);
+                          await adminApi.updateTask(t._id, {
+                            title: title.trim(),
+                            description: description.trim(),
+                            config: {
+                              ...(t.config || {}),
+                              interactive: {
+                                ...(t.config?.interactive || {}),
+                                correct_ids: nextCorrect,
+                              },
+                            },
+                          });
+                          await loadContent(selectedStudy);
+                          showSuccess('Aufgabe erfolgreich gespeichert.');
+                        } catch (err) {
+                          showError(err.message || 'Speichern fehlgeschlagen.');
+                        }
+                      }}
+                    >
+                      Bearbeiten
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-btn"
+                      onClick={async () => {
+                        const ok = window.confirm('Aufgabe wirklich löschen?');
+                        if (!ok) return;
+                        await adminApi.deleteTask(t._id);
+                        await loadContent(selectedStudy);
+                      }}
+                    >
+                      Löschen
+                    </button>
+                  </div>
+                </div>
+                {taskFiles.length > 0 && (
+                  <div className="task-file-actions">
+                    {taskFiles.map((file, idx) => (
+                      <div key={`${t._id}-file-actions-${idx}`} className="task-file-action-row">
+                        <a
+                          href={`${API_BASE}${file.path}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ghost-btn pdf-link"
+                        >
+                          Datei öffnen {idx + 1}
+                        </a>
+                        <button
+                          type="button"
+                          className="danger-btn"
+                          onClick={async () => {
+                            const ok = window.confirm(`Datei "${file.name}" wirklich löschen?`);
+                            if (!ok) return;
+                            await adminApi.deleteTaskAttachment(t._id, file.path);
+                            await loadContent(selectedStudy);
+                            showSuccess('Datei erfolgreich gelöscht.');
+                          }}
+                        >
+                          Datei löschen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-        <CardPanel title="Profil-Card-Wörter (max. 8)">
-          <FormField
-            label="Profil-Wort"
-            value={profileCardLabel}
-            onChange={(e) => setProfileCardLabel(e.target.value)}
-          />
-          <button
-            className="primary-btn"
-            onClick={async () => {
-              try {
-                if (!selectedStudy) return;
-                await adminApi.createProfileCard(selectedStudy, { label: profileCardLabel });
-                setProfileCardLabel('');
-                await loadContent(selectedStudy);
-                showSuccess('Profil-Wort erfolgreich erstellt.');
-              } catch (err) {
-                showError(err.message || 'Profil-Wort konnte nicht erstellt werden.');
-              }
-            }}
-          >
-            Profil-Wort hinzufügen
-          </button>
-          <small>{profileCards.length}/8 angelegt</small>
-          {profileCards.map((p) => (
-            <div key={p._id} className="item-row">
-              <div className="chip">{p.label}</div>
-              <div className="row-actions">
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={async () => {
-                    try {
-                      const label = window.prompt('Profil-Wort bearbeiten', p.label);
-                      if (!label || label.trim() === p.label) return;
-                      await adminApi.updateProfileCard(p._id, { label: label.trim() });
+                <div className="task-upload-block">
+                  <label
+                    className={`dropzone task-dropzone ${taskDragOverId === t._id ? 'is-dragover' : ''}`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setTaskDragOverId(t._id);
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      setTaskDragOverId('');
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setTaskDragOverId('');
+                      const files = Array.from(e.dataTransfer.files || []);
+                      if (files.length === 0) return;
+                      if (files.some((file) => !isTaskFileAllowed(file))) {
+                        showError('Nur PDF oder HTML Dateien sind erlaubt.');
+                        return;
+                      }
+                      setTaskUploadFiles((prev) => ({ ...prev, [t._id]: files }));
+                    }}
+                  >
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.html,.htm,application/pdf,text/html"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length === 0) return;
+                        if (files.some((file) => !isTaskFileAllowed(file))) {
+                          showError('Nur PDF oder HTML Dateien sind erlaubt.');
+                          return;
+                        }
+                        setTaskUploadFiles((prev) => ({ ...prev, [t._id]: files }));
+                      }}
+                    />
+                    <span>Aufgaben-Dateien (PDF/HTML) auswählen oder hierher ziehen</span>
+                    {taskUploadFiles[t._id]?.length > 0 && (
+                      <small>Ausgewählt: {taskUploadFiles[t._id].map((f) => f.name).join(', ')}</small>
+                    )}
+                  </label>
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    disabled={!taskUploadFiles[t._id]?.length}
+                    onClick={async () => {
+                      try {
+                        if (!taskUploadFiles[t._id]?.length) return;
+                        await adminApi.uploadTaskAttachment(t._id, taskUploadFiles[t._id]);
+                        setTaskUploadFiles((prev) => {
+                          const next = { ...prev };
+                          delete next[t._id];
+                          return next;
+                        });
+                        await loadContent(selectedStudy);
+                        showSuccess('Aufgaben-Datei erfolgreich hochgeladen.');
+                      } catch (err) {
+                        showError(err.message || 'Aufgaben-Datei konnte nicht hochgeladen werden.');
+                      }
+                    }}
+                  >
+                    Datei hochladen
+                  </button>
+                </div>
+
+                {htmlFiles.length > 1 && (
+                  <label className="form-field">
+                    <span>Interaktive HTML-Datei</span>
+                    <select
+                      value={selectedHtmlPath}
+                      onChange={async (e) => {
+                        try {
+                          await adminApi.updateTask(t._id, {
+                            config: {
+                              ...(t.config || {}),
+                              interactive: {
+                                ...(t.config?.interactive || {}),
+                                file_path: e.target.value,
+                              },
+                            },
+                          });
+                          await loadContent(selectedStudy);
+                          showSuccess('Interaktive HTML-Datei gespeichert.');
+                        } catch (err) {
+                          showError(err.message || 'HTML-Datei konnte nicht gespeichert werden.');
+                        }
+                      }}
+                    >
+                      <option value="">Bitte auswählen</option>
+                      {htmlFiles.map((file, idx) => (
+                        <option key={`${t._id}-html-${idx}`} value={file.path}>
+                          {file.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {htmlFiles.length === 1 && (
+                  <small className="task-file-meta">Interaktive HTML-Datei: {htmlFiles[0].name}</small>
+                )}
+                {selectedHtmlPath && (
+                  <small className="task-file-meta">Gewählte Datei: {selectedHtmlPath.split('/').pop()}</small>
+                )}
+                <div className="task-steps">
+                  <strong>Aufgabenstellungen ({taskSteps.length})</strong>
+                  {taskSteps.length === 0 && (
+                    <small className="task-file-meta">Noch keine Aufgabenstellung vorhanden.</small>
+                  )}
+                  {taskSteps.map((step, idx) => (
+                    <div key={`${t._id}-step-${idx}`} className="row-item">
+                      <div>
+                        <strong>Schritt {idx + 1}</strong>
+                        <small>{step.prompt}</small>
+                        {Array.isArray(step.correct_ids) && step.correct_ids.length > 0 && (
+                          <small>Richtige IDs: {step.correct_ids.join(', ')}</small>
+                        )}
+                      </div>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          disabled={idx === 0}
+                          onClick={async () => {
+                            if (idx === 0) return;
+                            const nextSteps = [...taskSteps];
+                            [nextSteps[idx - 1], nextSteps[idx]] = [nextSteps[idx], nextSteps[idx - 1]];
+                            await adminApi.updateTask(t._id, {
+                              steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
+                            });
+                            await loadContent(selectedStudy);
+                          }}
+                        >
+                          Hoch
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          disabled={idx === taskSteps.length - 1}
+                          onClick={async () => {
+                            if (idx >= taskSteps.length - 1) return;
+                            const nextSteps = [...taskSteps];
+                            [nextSteps[idx + 1], nextSteps[idx]] = [nextSteps[idx], nextSteps[idx + 1]];
+                            await adminApi.updateTask(t._id, {
+                              steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
+                            });
+                            await loadContent(selectedStudy);
+                          }}
+                        >
+                          Runter
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          onClick={async () => {
+                            const prompt = window.prompt('Aufgabenstellung bearbeiten', step.prompt || '');
+                            if (prompt === null) return;
+                            const correct = window.prompt(
+                              'Richtige Antwort-IDs (Komma-getrennt)',
+                              Array.isArray(step.correct_ids) ? step.correct_ids.join(', ') : ''
+                            );
+                            if (correct === null) return;
+                            const nextSteps = taskSteps.map((s, i) =>
+                              i === idx
+                                ? {
+                                    ...s,
+                                    prompt: prompt.trim(),
+                                    correct_ids: correct.split(',').map((x) => x.trim()).filter(Boolean),
+                                  }
+                                : s
+                            );
+                            await adminApi.updateTask(t._id, {
+                              steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
+                            });
+                            await loadContent(selectedStudy);
+                            showSuccess('Aufgabenstellung gespeichert.');
+                          }}
+                        >
+                          Bearbeiten
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-btn"
+                          onClick={async () => {
+                            const ok = window.confirm('Aufgabenstellung wirklich löschen?');
+                            if (!ok) return;
+                            const nextSteps = taskSteps.filter((_, i) => i !== idx);
+                            await adminApi.updateTask(t._id, {
+                              steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
+                            });
+                            await loadContent(selectedStudy);
+                          }}
+                        >
+                          Löschen
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={async () => {
+                      const prompt = window.prompt('Neue Aufgabenstellung');
+                      if (!prompt || !prompt.trim()) return;
+                      const correct = window.prompt('Richtige Antwort-IDs (Komma-getrennt)', '');
+                      if (correct === null) return;
+                      const nextSteps = [
+                        ...taskSteps,
+                        {
+                          prompt: prompt.trim(),
+                          order_index: taskSteps.length,
+                          correct_ids: correct.split(',').map((x) => x.trim()).filter(Boolean),
+                        },
+                      ];
+                      await adminApi.updateTask(t._id, {
+                        steps: nextSteps,
+                      });
                       await loadContent(selectedStudy);
-                      showSuccess('Profil-Wort erfolgreich gespeichert.');
-                    } catch (err) {
-                      showError(err.message || 'Speichern fehlgeschlagen.');
-                    }
-                  }}
-                >
-                  Bearbeiten
-                </button>
-                <button
-                  type="button"
-                  className="danger-btn"
-                  onClick={async () => {
-                    const ok = window.confirm('Profil-Wort wirklich löschen?');
-                    if (!ok) return;
-                    await adminApi.deleteProfileCard(p._id);
-                    await loadContent(selectedStudy);
-                  }}
-                >
-                  Löschen
-                </button>
+                      showSuccess('Aufgabenstellung hinzugefügt.');
+                    }}
+                  >
+                    Aufgabenstellung hinzufügen
+                  </button>
+                </div>
+                {Array.isArray(t.config?.interactive?.selectable_ids) &&
+                  t.config.interactive.selectable_ids.length > 0 && (
+                    <small className="task-file-meta">
+                      Klickbare IDs: {t.config.interactive.selectable_ids.join(', ')}
+                    </small>
+                  )}
+                {Array.isArray(t.config?.interactive?.correct_ids) &&
+                  t.config.interactive.correct_ids.length > 0 && (
+                    <small className="task-file-meta">
+                      Richtige IDs: {t.config.interactive.correct_ids.join(', ')}
+                    </small>
+                  )}
+                {taskFiles.map((file, idx) => (
+                  <small key={`${t._id}-file-${idx}`} className="task-file-meta">
+                    Datei: {file.name} ({file.format || 'none'})
+                  </small>
+                ))}
               </div>
-            </div>
-          ))}
-        </CardPanel>
+            );
+          })}
+          </CardPanel>
+        </div>
+        )}
       </div>}
     </div>
   );

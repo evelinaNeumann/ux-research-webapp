@@ -7,6 +7,7 @@ export const studyApi = {
   getCards: (id) => http(`/studies/${id}/cards`),
   getCardSortColumns: (id) => http(`/studies/${id}/card-sort-columns`),
   getImages: (id) => http(`/studies/${id}/images`),
+  getTasks: (id) => http(`/studies/${id}/tasks`),
   getProfileCards: (id) => http(`/studies/${id}/profile-cards`),
   create: (payload) => http('/studies', { method: 'POST', body: JSON.stringify(payload) }),
   update: (id, payload) => http(`/studies/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),

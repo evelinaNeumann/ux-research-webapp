@@ -11,8 +11,18 @@ const MODULE_LABELS = {
   questionnaire: 'Interview',
   card_sort: 'Card Sorting',
   image_rating: 'Bildbewertung',
+  task_work: 'Aufgabenbearbeitung',
   mixed: 'mixed',
 };
+
+function defaultModulesForStudy(study) {
+  const type = String(study?.type || 'mixed');
+  if (type === 'questionnaire') return ['questionnaire'];
+  if (type === 'card_sort') return ['card_sort'];
+  if (type === 'image_rating') return ['image_rating'];
+  if (type === 'task_work') return [];
+  return ['questionnaire', 'card_sort', 'image_rating'];
+}
 
 export function DashboardPage({ user }) {
   const navigate = useNavigate();
@@ -73,7 +83,7 @@ export function DashboardPage({ user }) {
         const study = studyById[studyId];
         const modules = study?.module_order?.length
           ? study.module_order
-          : ['questionnaire', 'card_sort', 'image_rating'];
+          : defaultModulesForStudy(study);
 
         if (!totalByStudyId[studyId]) {
           const [q, c, columns, i] = await Promise.all([

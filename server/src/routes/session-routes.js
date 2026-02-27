@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { Session } from '../models/Session.js';
 import { Study } from '../models/Study.js';
-import { StudyAssignment } from '../models/StudyAssignment.js';
 import { UserStudyProfile } from '../models/UserStudyProfile.js';
 import { Question } from '../models/Question.js';
 import { Answer } from '../models/Answer.js';
@@ -11,11 +10,23 @@ import { CardSort } from '../models/CardSort.js';
 import { CardSortColumn } from '../models/CardSortColumn.js';
 import { ImageAsset } from '../models/ImageAsset.js';
 import { ImageRating } from '../models/ImageRating.js';
+import { ResearchTask } from '../models/ResearchTask.js';
+import { TaskResponse } from '../models/TaskResponse.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, forbidden, badRequest } from '../utils/errors.js';
+import { hasStudyAccessForUser } from '../utils/study-access.js';
 
 const router = Router();
 router.use(requireAuth);
+
+function defaultModulesForStudy(study) {
+  const type = String(study?.type || 'mixed');
+  if (type === 'questionnaire') return ['questionnaire'];
+  if (type === 'card_sort') return ['card_sort'];
+  if (type === 'image_rating') return ['image_rating'];
+  if (type === 'task_work') return [];
+  return ['questionnaire', 'card_sort', 'image_rating'];
+}
 
 router.post('/', async (req, res, next) => {
   try {
@@ -25,12 +36,8 @@ router.post('/', async (req, res, next) => {
     const study = await Study.findById(study_id);
     if (!study) throw notFound('study not found');
     if (req.auth.role !== 'admin') {
-      const assignment = await StudyAssignment.findOne({
-        study_id,
-        user_id: req.auth.sub,
-        is_active: true,
-      });
-      if (!assignment) throw forbidden('study not assigned to user');
+      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub);
+      if (!hasAccess) throw forbidden('study not assigned to user');
 
       const profile = await UserStudyProfile.findOne({
         study_id,
@@ -52,7 +59,7 @@ router.post('/', async (req, res, next) => {
       study_id,
       study_version: study.version,
       module_type: study.type,
-      current_module: (study.module_order?.[0] || 'questionnaire'),
+      current_module: (study.module_order?.[0] || defaultModulesForStudy(study)[0] || 'task_work'),
     });
 
     res.status(201).json(item);
@@ -91,9 +98,9 @@ router.put('/:id/complete', async (req, res, next) => {
     const item = await Session.findById(req.params.id);
     if (!item) throw notFound('session not found');
     if (req.auth.role !== 'admin' && String(item.user_id) !== req.auth.sub) throw forbidden();
-    const study = await Study.findById(item.study_id, { module_order: 1 });
+    const study = await Study.findById(item.study_id, { module_order: 1, type: 1 });
     if (!study) throw notFound('study not found');
-    const modules = study.module_order?.length ? study.module_order : ['questionnaire', 'card_sort', 'image_rating'];
+    const modules = study.module_order?.length ? study.module_order : defaultModulesForStudy(study);
 
     const needsQuestionnaire = modules.includes('questionnaire');
     const needsCardSort = modules.includes('card_sort');
@@ -154,6 +161,51 @@ router.put('/:id/complete', async (req, res, next) => {
         if (rated.size < images.length) {
           throw badRequest('Bitte zuerst alle Bildbewertungen fertigstellen.');
         }
+      }
+    }
+
+    const interactiveTasks = await ResearchTask.find(
+      { study_id: item.study_id, 'config.interactive.enabled': true },
+      { _id: 1, title: 1, steps: 1 }
+    );
+    if (interactiveTasks.length > 0) {
+      const requiredTaskIds = interactiveTasks.map((t) => String(t._id));
+      const responses = await TaskResponse.find(
+        { session_id: item._id, task_id: { $in: requiredTaskIds } },
+        { task_id: 1, step_index: 1 }
+      );
+      const answeredByTask = responses.reduce((acc, row) => {
+        const key = String(row.task_id);
+        if (!acc[key]) acc[key] = new Set();
+        acc[key].add(Number(row.step_index || 0));
+        return acc;
+      }, {});
+      const missing = interactiveTasks.filter((task) => {
+        const taskId = String(task._id);
+        const validSteps = Array.isArray(task.steps)
+          ? task.steps.filter((step) => String(step?.prompt || '').trim())
+          : [];
+        const requiredCount = validSteps.length > 0 ? validSteps.length : 1;
+        return (answeredByTask[taskId]?.size || 0) < requiredCount;
+      });
+      if (missing.length > 0) {
+        const missingDetails = [];
+        for (const task of missing) {
+          const taskId = String(task._id);
+          const title = String(task.title || `Task ${taskId}`);
+          const validSteps = Array.isArray(task.steps)
+            ? task.steps.filter((step) => String(step?.prompt || '').trim())
+            : [];
+          const requiredCount = validSteps.length > 0 ? validSteps.length : 1;
+          const answered = answeredByTask[taskId] || new Set();
+          for (let stepIdx = 0; stepIdx < requiredCount; stepIdx += 1) {
+            if (!answered.has(stepIdx)) {
+              missingDetails.push(`${title} - Schritt ${stepIdx + 1}`);
+            }
+          }
+        }
+        const suffix = missingDetails.length > 0 ? ` Fehlend: ${missingDetails.join(', ')}` : '';
+        throw badRequest(`Bitte zuerst alle interaktiven Aufgaben beantworten.${suffix}`);
       }
     }
 

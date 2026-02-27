@@ -7,10 +7,16 @@ export const adminApi = {
     http(`/admin/users/${userId}/profiles/${studyId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   setUserRole: (userId, role) =>
     http(`/admin/users/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
+  listPasswordResetRequests: () => http('/admin/users/password-reset-requests'),
+  decidePasswordResetRequest: (userId, decision) =>
+    http(`/admin/users/${userId}/password-reset-decision`, { method: 'POST', body: JSON.stringify({ decision }) }),
   deleteUser: (userId) => http(`/admin/users/${userId}`, { method: 'DELETE' }),
   listAssignments: (studyId) => http(`/admin/studies/${studyId}/assignments`),
   assignUserToStudy: (studyId, user_id) =>
     http(`/admin/studies/${studyId}/assignments`, { method: 'POST', body: JSON.stringify({ user_id }) }),
+  assignStudyToAllUsers: (studyId) => http(`/admin/studies/${studyId}/assignments/assign-all`, { method: 'POST' }),
+  disableAssignStudyToAllUsers: (studyId) =>
+    http(`/admin/studies/${studyId}/assignments/assign-all`, { method: 'DELETE' }),
   removeAssignment: (studyId, userId) =>
     http(`/admin/studies/${studyId}/assignments/${userId}`, { method: 'DELETE' }),
   listProfileCards: (studyId) => http(`/admin/studies/${studyId}/profile-cards`),
@@ -40,6 +46,18 @@ export const adminApi = {
   listTasks: (studyId) => http(`/admin/studies/${studyId}/tasks`),
   createTask: (studyId, payload) =>
     http(`/admin/studies/${studyId}/tasks`, { method: 'POST', body: JSON.stringify(payload) }),
+  uploadTaskAttachment: (taskId, files) => {
+    const formData = new FormData();
+    for (const file of files || []) {
+      formData.append('files', file);
+    }
+    return http(`/admin/tasks/${taskId}/attachment`, { method: 'POST', body: formData });
+  },
+  deleteTaskAttachment: (taskId, path) =>
+    http(`/admin/tasks/${taskId}/attachment`, {
+      method: 'DELETE',
+      body: JSON.stringify({ path }),
+    }),
   updateTask: (taskId, payload) =>
     http(`/admin/tasks/${taskId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteTask: (taskId) => http(`/admin/tasks/${taskId}`, { method: 'DELETE' }),

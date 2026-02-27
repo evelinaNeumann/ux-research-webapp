@@ -77,16 +77,16 @@ export function ProfileSetupPage() {
   const saveAndStart = async () => {
     setMessage('');
     try {
-      if (cards.length < 8) {
-        setMessage('Admin muss zuerst 8 Profil-Card-Wörter für diese Studie anlegen.');
-        return;
-      }
-      if (form.key_points.length !== 4) {
+      const hasProfileWords = cards.length > 0;
+      if (hasProfileWords && form.key_points.length !== 4) {
         setMessage('Bitte genau 4 wichtige Punkte auswählen.');
         return;
       }
 
-      await profileApi.saveStudyProfile(studyId, form);
+      await profileApi.saveStudyProfile(studyId, {
+        ...form,
+        key_points: hasProfileWords ? form.key_points : [],
+      });
       const session = await sessionApi.start(studyId);
       navigate(`/session/${session._id}`);
     } catch (err) {
@@ -132,26 +132,28 @@ export function ProfileSetupPage() {
           </label>
         )}
 
-        <div>
-          <strong>4 wichtigste Punkte wählen</strong>
-          <small className="subtext">({form.key_points.length}/4 ausgewählt)</small>
-          {prefillInfo && <small className="subtext prefill-info">{prefillInfo}</small>}
-          <div className="point-grid">
-            {cards.map((c) => {
-              const active = form.key_points.includes(c.label);
-              return (
-                <button
-                  type="button"
-                  key={c._id}
-                  className={active ? 'point active' : 'point'}
-                  onClick={() => togglePoint(c.label)}
-                >
-                  {c.label}
-                </button>
-              );
-            })}
+        {cards.length > 0 && (
+          <div>
+            <strong>4 wichtigste Punkte wählen</strong>
+            <small className="subtext">({form.key_points.length}/4 ausgewählt)</small>
+            {prefillInfo && <small className="subtext prefill-info">{prefillInfo}</small>}
+            <div className="point-grid">
+              {cards.map((c) => {
+                const active = form.key_points.includes(c.label);
+                return (
+                  <button
+                    type="button"
+                    key={c._id}
+                    className={active ? 'point active' : 'point'}
+                    onClick={() => togglePoint(c.label)}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         <button className="primary-btn" onClick={saveAndStart}>Speichern und Studie starten</button>
         {message && <p className="error-text">{message}</p>}

@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { User } from '../models/User.js';
+import { Study } from '../models/Study.js';
+import { StudyAssignment } from '../models/StudyAssignment.js';
 import { env } from '../config/env.js';
 import { requireAuth } from '../middleware/auth.js';
 import { badRequest, unauthorized } from '../utils/errors.js';
@@ -55,6 +57,28 @@ router.post('/register', async (req, res, next) => {
 
     const password_hash = await bcrypt.hash(password, 12);
     const user = await User.create({ username, password_hash, role: 'user' });
+    const globalStudies = await Study.find({ is_active: true, assign_to_all_users: true }, { _id: 1 }).lean();
+    if (globalStudies.length > 0) {
+      await StudyAssignment.bulkWrite(
+        globalStudies.map((study) => ({
+          updateOne: {
+            filter: { study_id: study._id, user_id: user._id },
+            update: {
+              $set: {
+                is_active: true,
+                assigned_at: new Date(),
+              },
+              $setOnInsert: {
+                study_id: study._id,
+                user_id: user._id,
+                assigned_by: user._id,
+              },
+            },
+            upsert: true,
+          },
+        }))
+      );
+    }
     const token = issueAuthCookie(res, user);
 
     res.status(201).json({ id: user._id, username: user.username, role: user.role, accessToken: token });
@@ -94,6 +118,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     const { username, password } = req.body;
     const user = await User.findOne({ username });
     if (!user) throw unauthorized('invalid credentials');
+    if (user.password_reset_required) throw badRequest('Passwort-Reset erforderlich. Bitte zuerst neues Passwort vergeben.');
 
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) throw unauthorized('invalid credentials');
@@ -101,6 +126,63 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     const token = issueAuthCookie(res, user);
 
     res.json({ accessToken: token, role: user.role, username: user.username });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const username = String(req.body?.username || '').trim();
+    if (!username) throw badRequest('username required');
+    const user = await User.findOne({ username });
+    if (!user || user.role !== 'user') {
+      return res.status(200).json({ message: 'Wenn der Nutzer existiert, wurde die Anfrage gespeichert.' });
+    }
+    user.password_reset_requested_at = new Date();
+    user.password_reset_status = 'pending';
+    user.password_reset_required = false;
+    await user.save();
+    return res.status(200).json({ message: 'Anfrage gespeichert. Admin-Freigabe erforderlich.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/password-reset-status/:username', async (req, res, next) => {
+  try {
+    const username = String(req.params.username || '').trim();
+    if (!username) throw badRequest('username required');
+    const user = await User.findOne({ username }, { password_reset_required: 1, password_reset_status: 1 });
+    if (!user) return res.json({ requires_reset: false, status: 'none' });
+    return res.json({
+      requires_reset: !!user.password_reset_required,
+      status: user.password_reset_status || 'none',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/reset-password-with-username', async (req, res, next) => {
+  try {
+    const username = String(req.body?.username || '').trim();
+    const newPassword = String(req.body?.newPassword || '');
+    if (!username || !newPassword) throw badRequest('username and newPassword required');
+    const user = await User.findOne({ username });
+    if (!user) throw badRequest('Benutzer nicht gefunden');
+    if (!user.password_reset_required) {
+      throw badRequest('Passwort-Reset ist für diesen Nutzer nicht freigegeben');
+    }
+    if (!validatePassword(newPassword, user.username)) throw badRequest(PASSWORD_POLICY_MESSAGE);
+
+    user.password_hash = await bcrypt.hash(newPassword, 12);
+    user.password_reset_required = false;
+    user.password_reset_status = 'none';
+    user.password_reset_requested_at = null;
+    await user.save();
+
+    return res.status(200).json({ message: 'Neues Passwort gespeichert. Du kannst dich jetzt anmelden.' });
   } catch (err) {
     next(err);
   }

@@ -360,6 +360,40 @@ function toModulePdfEntries(report) {
     null,
     20
   );
+  spacer(8);
+
+  push('5. Aufgabenbearbeitung', { bold: true, size: 13 });
+  push(`Antworten gesamt (alle Schritte): ${report.overview.task_work?.submissions_total ?? 0}`, {
+    size: 10,
+    indent: 16,
+  });
+  const taskItems = report.overview.task_work?.tasks || [];
+  if (!taskItems.length) {
+    push('Keine Aufgaben-Daten vorhanden.', { size: 10, indent: 16 });
+  } else {
+    taskItems.forEach((task, taskIdx) => {
+      push(`${taskIdx + 1}. Task: ${task.title}`, { bold: true, size: 11 });
+      push(
+        `Gesamt: ${task.total ?? 0} | korrekt: ${task.correct ?? 0} | falsch: ${task.incorrect ?? 0}`,
+        { size: 10, indent: 16 }
+      );
+      (task.steps || []).forEach((step) => {
+        push(
+          `- Schritt ${Number(step.step_index || 0) + 1}: ${step.prompt || '-'} | n: ${step.total ?? 0} | korrekt: ${step.correct ?? 0} | falsch: ${step.incorrect ?? 0} | Quote: ${step.correct_rate ?? 0}%`,
+          { size: 10, indent: 20, wrap: true }
+        );
+      });
+      spacer(3);
+    });
+    push('5.1 Diagramm: Korrektquote je Aufgabenstellung', { bold: true, size: 11 });
+    const taskRateRows = taskItems.flatMap((task) =>
+      (task.steps || []).map((step) => ({
+        key: `${task.title} - S${Number(step.step_index || 0) + 1}`,
+        count: Number(step.correct_rate || 0),
+      }))
+    );
+    pushBars(taskRateRows, (row) => row.key, 100, 20);
+  }
   return entries;
 }
 
@@ -407,6 +441,15 @@ function buildModulesCharts(overview = {}) {
       chart_type: 'bar',
       labels: (overview.image_rating || []).map((row) => `Bild ${String(row._id)}`),
       series: (overview.image_rating || []).map((row) => Number((Number(row.avg || 0)).toFixed(2))),
+    },
+    task_work_correct_rate: {
+      chart_type: 'bar',
+      labels: (overview.task_work?.tasks || []).flatMap((task) =>
+        (task.steps || []).map((step) => `${task.title} - S${Number(step.step_index || 0) + 1}`)
+      ),
+      series: (overview.task_work?.tasks || []).flatMap((task) =>
+        (task.steps || []).map((step) => Number(step.correct_rate || 0))
+      ),
     },
   };
 }

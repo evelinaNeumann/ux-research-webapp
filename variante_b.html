@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Navigationsstruktur - Variante B</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --surface: #ffffff;
+        --text: #111111;
+        --muted: #4b5563;
+        --line: #d9e5e6;
+        --teal-soft: #eaf5f6;
+        --teal-accent: #2f7f83;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        color: var(--text);
+        background: var(--bg);
+      }
+
+      .page {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 28px 24px 40px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2rem;
+        line-height: 1.2;
+      }
+
+      .intro {
+        margin: 0 0 22px;
+        color: var(--muted);
+        max-width: 760px;
+        line-height: 1.45;
+      }
+
+      .top-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .top-chip {
+        border: 1px solid var(--line);
+        background: var(--teal-soft);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 0.9rem;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+
+      details.card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+
+      details.card[open] {
+        border-color: #bedbdd;
+        box-shadow: 0 0 0 1px #d7edef inset;
+      }
+
+      details.card summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 12px 14px;
+        font-weight: 600;
+        background: var(--teal-soft);
+        border-bottom: 1px solid transparent;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      details.card[open] summary {
+        border-bottom-color: var(--line);
+      }
+
+      details.card summary::-webkit-details-marker {
+        display: none;
+      }
+
+      details.card summary::after {
+        content: "\25BE";
+        color: var(--teal-accent);
+        font-size: 0.95rem;
+      }
+
+      details.card[open] summary::after {
+        content: "\25B4";
+      }
+
+      .links {
+        margin: 0;
+        padding: 10px 14px 14px 30px;
+      }
+
+      .links li {
+        margin: 6px 0;
+      }
+
+      .links a {
+        color: var(--text);
+        text-decoration-color: #9dc7ca;
+      }
+
+      .links a:hover {
+        color: var(--teal-accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <h1>Navigationsstruktur - Variante B</h1>
+      <p class="intro">
+        Struktur basiert auf Kundenbedürfnissen und Use Cases. Ideal für Marketing-Tech UI und schnelles Auffinden
+        von Lösungswegen.
+      </p>
+
+      <nav aria-label="Hauptnavigation Variante B">
+        <div class="top-row" aria-hidden="true">
+          <span class="top-chip">Lösungen</span>
+          <span class="top-chip">Leistungen</span>
+          <span class="top-chip">Rechenzentrum</span>
+          <span class="top-chip">Unternehmen</span>
+        </div>
+
+        <div class="cards">
+          <details class="card">
+            <summary>Lösungen</summary>
+            <ul class="links">
+              <li><a href="/loesungen/cloud">Cloud Lösungen</a></li>
+              <li><a href="/loesungen/it-security">IT-Security</a></li>
+              <li><a href="/loesungen/managed-services">Managed Services</a></li>
+              <li><a href="/loesungen/automatisierung">Automatisierung</a></li>
+              <li><a href="/loesungen/infrastruktur">Infrastruktur</a></li>
+            </ul>
+          </details>
+
+          <details class="card">
+            <summary>Leistungen</summary>
+            <ul class="links">
+              <li><a href="/cloud/private-cloud">Private Cloud</a></li>
+              <li><a href="/cloud/hybrid-cloud">Hybrid Cloud</a></li>
+              <li><a href="/consulting">Consulting</a></li>
+              <li><a href="/managed-services/zusatzleistungen">Zusatzleistungen</a></li>
+              <li><a href="/managed-services/preismodell">Preismodelle</a></li>
+            </ul>
+          </details>
+
+          <details class="card">
+            <summary>Rechenzentrum</summary>
+            <ul class="links">
+              <li><a href="/rechenzentrum/daten-fakten">Daten &amp; Fakten</a></li>
+              <li><a href="/rechenzentrum/sicherheitstechnik">Sicherheitstechnik</a></li>
+              <li><a href="/rechenzentrum/klimatisierung">Energie &amp; Klima</a></li>
+              <li><a href="/rechenzentrum/qualitaetsmanagement">Qualitätsmanagement</a></li>
+              <li><a href="/rechenzentrum/bildergalerie">Bildergalerie</a></li>
+              <li><a href="/han-cix">HAN-CIX - powered by DE-CIX</a></li>
+            </ul>
+          </details>
+
+          <details class="card">
+            <summary>Unternehmen</summary>
+            <ul class="links">
+              <li><a href="/unternehmen/ueber-uns">Über uns</a></li>
+              <li><a href="/unternehmen/zertifizierungen">Zertifizierungen</a></li>
+              <li><a href="/unternehmen/nachhaltigkeit">Nachhaltigkeit</a></li>
+              <li><a href="/news">News</a></li>
+              <li><a href="/jobs">Jobs</a></li>
+              <li><a href="/imagefilm">Imagefilm</a></li>
+            </ul>
+          </details>
+        </div>
+      </nav>
+    </main>
+  </body>
+</html>

@@ -6,24 +6,29 @@ import { Card } from '../models/Card.js';
 import { CardSortColumn } from '../models/CardSortColumn.js';
 import { ImageAsset } from '../models/ImageAsset.js';
 import { StudyProfileCard } from '../models/StudyProfileCard.js';
+import { ResearchTask } from '../models/ResearchTask.js';
 import { uploadStudyPdf } from '../middleware/upload-study-pdf.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, badRequest } from '../utils/errors.js';
+import { hasStudyAccessForUser } from '../utils/study-access.js';
 
 const router = Router();
+
+function moduleOrderForStudyType(type) {
+  if (type === 'questionnaire') return ['questionnaire'];
+  if (type === 'card_sort') return ['card_sort'];
+  if (type === 'image_rating') return ['image_rating'];
+  if (type === 'task_work') return [];
+  return ['questionnaire', 'card_sort', 'image_rating'];
+}
 
 async function assertStudyAccess(studyId, auth) {
   const study = await Study.findById(studyId);
   if (!study) throw notFound('study not found');
   if (auth.role !== 'admin') {
-    if (!study.is_active) throw notFound('study not found');
-    const assignment = await StudyAssignment.findOne({
-      study_id: study._id,
-      user_id: auth.sub,
-      is_active: true,
-    });
-    if (!assignment) throw notFound('study not found');
+    const hasAccess = await hasStudyAccessForUser(study, auth.sub);
+    if (!hasAccess) throw notFound('study not found');
   }
   return study;
 }
@@ -63,9 +68,19 @@ router.get('/', requireAuth, async (req, res, next) => {
     const { page, limit, skip } = getPagination(req.query);
     let query = {};
     if (req.auth.role !== 'admin') {
-      const assignments = await StudyAssignment.find({ user_id: req.auth.sub, is_active: true }, { study_id: 1 });
-      const studyIds = assignments.map((x) => x.study_id);
-      query = { _id: { $in: studyIds }, is_active: true };
+      const [activeAssignments, inactiveAssignments] = await Promise.all([
+        StudyAssignment.find({ user_id: req.auth.sub, is_active: true }, { study_id: 1 }),
+        StudyAssignment.find({ user_id: req.auth.sub, is_active: false }, { study_id: 1 }),
+      ]);
+      const activeStudyIds = activeAssignments.map((x) => x.study_id);
+      const blockedStudyIds = inactiveAssignments.map((x) => x.study_id);
+      query = {
+        is_active: true,
+        $or: [
+          { _id: { $in: activeStudyIds } },
+          { assign_to_all_users: true, _id: { $nin: blockedStudyIds } },
+        ],
+      };
     }
     const [items, total] = await Promise.all([
       Study.find(query).sort({ created_at: -1 }).skip(skip).limit(limit),
@@ -126,6 +141,16 @@ router.get('/:id/images', requireAuth, async (req, res, next) => {
   }
 });
 
+router.get('/:id/tasks', requireAuth, async (req, res, next) => {
+  try {
+    await assertStudyAccess(req.params.id, req.auth);
+    const items = await ResearchTask.find({ study_id: req.params.id }).sort({ order_index: 1, _id: 1 });
+    res.json(items);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/:id/profile-cards', requireAuth, async (req, res, next) => {
   try {
     await assertStudyAccess(req.params.id, req.auth);
@@ -157,7 +182,7 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res, next) => {
       name,
       description,
       type,
-      module_order,
+      module_order: module_order !== undefined ? module_order : moduleOrderForStudyType(type),
       profile_cards_source_study_id: inheritance.sourceId,
       inherit_profile_cards: inheritance.inheritProfileCards,
       inherit_user_profile_points: inheritance.inheritUserPoints,
@@ -185,7 +210,12 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res, next) => 
 
     if (name !== undefined) study.name = name;
     if (description !== undefined) study.description = description;
-    if (type !== undefined) study.type = type;
+    if (type !== undefined) {
+      study.type = type;
+      if (module_order === undefined) {
+        study.module_order = moduleOrderForStudyType(type);
+      }
+    }
     if (is_active !== undefined) study.is_active = is_active;
     if (module_order !== undefined) study.module_order = module_order;
     if (
