@@ -151,7 +151,7 @@ router.get('/image-rating/session/:sessionId', async (req, res, next) => {
 
 router.post('/task-response', async (req, res, next) => {
   try {
-    const { session_id, task_id, selected_ids, step_index } = req.body;
+    const { session_id, task_id, selected_ids, step_index, timed_out } = req.body;
     const session = await assertSessionOwnership(session_id, req.auth);
     assertWritableSession(session);
 
@@ -201,7 +201,9 @@ router.post('/task-response', async (req, res, next) => {
     );
     const selectedSet = new Set(uniqueSelected);
     const correctSet = new Set(correct);
+    const isTimedOut = !!timed_out;
     const isCorrect =
+      !isTimedOut &&
       selectedSet.size === correctSet.size &&
       uniqueSelected.every((x) => correctSet.has(x)) &&
       correct.every((x) => selectedSet.has(x));
@@ -219,6 +221,8 @@ router.post('/task-response', async (req, res, next) => {
           selected_ids: uniqueSelected,
           is_correct: isCorrect,
           result_status: isCorrect ? 'correct' : 'incorrect',
+          timed_out: isTimedOut,
+          timeout_note: isTimedOut ? 'User konnte keine Angabe in definiertem Zeitrahmen treffen.' : '',
           updated_at: now,
         },
         $setOnInsert: { created_at: now },

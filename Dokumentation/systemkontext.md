@@ -36,14 +36,23 @@ Die App ist ein lokales Research-System für Planung, Durchführung und Auswertu
 - Registrierung/Login
 - Dashboard
 - Profil-Setup (falls für Studie noch nicht vorhanden)
-- Session (Interview/Card Sorting/Bildauswertung, nur mit vorhandenem Content)
-- Abschluss (nur bei vollständigem Interview)
+- Session (nur Module mit vorhandenem Content)
+- Aufgabenbearbeitung:
+  - nur eine Aufgabe gleichzeitig sichtbar,
+  - Schritte in Admin-Reihenfolge,
+  - optionales Zeitlimit je Schritt mit Auto-Weiterleitung,
+  - Timeout im letzten Schritt beendet die Aufgabe automatisch.
+- Abschluss (nur bei vollständig bearbeiteten Pflichtmodulen)
 - Danach read-only ansehen
 
 ## 5. Screenflow Admin
 - Login
 - Studienverwaltung (CRUD, Beschreibung, PDF-Briefing)
-- Contentpflege (Fragen/Cards/Bilder/Page Tree/Aufgaben)
+- Contentpflege (Fragen/Cards/Card-Sorting-Spalten/Bilder/Page Tree/Aufgaben)
+- Aufgaben:
+  - mehrstufige Aufgabenstellungen,
+  - mehrere PDF/HTML-Anhänge je Aufgabe,
+  - Zeitlimit pro Schritt.
 - Studien-Zuweisung
 - Analytics:
   - KPI + Chart
@@ -60,3 +69,4 @@ Diese Regeln gelten für alle Folgeänderungen:
 - Layout-Symmetrie zwischen vergleichbaren Admin-Cards.
 - Neue UI-Bereiche als eigene Komponente mit separatem CSS.
 - Keine regressiven Datenzählungen: Analytics zählt pro Session+Frage den letzten Stand.
+- Aufgaben-Analytics muss `falsch geklickt` und `Zeit abgelaufen` getrennt ausweisen.

@@ -10,6 +10,8 @@ const taskResponseSchema = new mongoose.Schema(
     selected_ids: { type: [String], default: [] },
     is_correct: { type: Boolean, default: false },
     result_status: { type: String, enum: ['correct', 'incorrect'], default: 'incorrect' },
+    timed_out: { type: Boolean, default: false },
+    timeout_note: { type: String, default: '' },
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now },
   },

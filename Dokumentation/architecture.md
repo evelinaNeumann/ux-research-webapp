@@ -19,18 +19,22 @@ Client (React) -> Express API -> MongoDB
 
 ## Data-Integrity-Regeln
 - Session `done` => read-only
-- Session-Abschluss nur bei vollständigem Interview
+- Session-Abschluss nur bei vollständigen Pflichtmodulen
 - User sieht nur aktive zugewiesene Studien
 - Analytics-Filter greifen serverseitig
+- Interaktive Aufgaben speichern genau einen Datensatz pro `(session_id, task_id, step_index)`
+- Task-Timeout speichert `timed_out=true` und wird in Analytics getrennt ausgewertet
 
 ## Upload-Architektur
 - Bilder: `server/uploads`
 - Studien-PDF: `server/uploads/study-briefs`
+- Aufgaben-Dateien: `server/uploads/task-files`
 - Statische Auslieferung über `/uploads`
 
 ## Analytics-Architektur
 - KPI, Moduldaten, Portraitdaten aus Mongo-Aggregation
 - Profilfilter (Alter/Rolle/Wort) bestimmen Ziel-Usermenge
+- Aufgabenmodul aggregiert `correct`, `incorrect_click`, `timed_out`
 - Exporte:
   - Global CSV/JSON
   - Portrait-Report PDF/JSON

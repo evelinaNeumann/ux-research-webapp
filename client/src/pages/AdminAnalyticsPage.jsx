@@ -627,35 +627,50 @@ export function AdminAnalyticsPage() {
                         <section key={task.task_id} className="qa-block modules-data-grid-full">
                           <p className="qa-question">{task.title}</p>
                           <small>
-                            Gesamt: {task.total ?? 0} • korrekt: {task.correct ?? 0} • falsch: {task.incorrect ?? 0}
+                            Gesamt: {task.total ?? 0} • korrekt: {task.correct ?? 0} • falsch geklickt: {task.incorrect_click ?? 0} • Zeit abgelaufen: {task.timed_out ?? 0}
                           </small>
                           <div className="qa-answer-list">
-                            {(task.steps || []).map((step) => (
-                              <div key={`${task.task_id}-${step.step_index}`} className="list-row">
-                                <span>
-                                  Schritt {Number(step.step_index || 0) + 1}: {step.prompt || '-'}
-                                </span>
-                                <small>
-                                  n: {step.total ?? 0} • korrekt: {step.correct ?? 0} • falsch: {step.incorrect ?? 0} • Quote: {step.correct_rate ?? 0}%
-                                </small>
-                              </div>
-                            ))}
+                            <p className="qa-question">Kreisdiagramm: Gesamt korrekt/falsch</p>
+                            <div className="pie-cards-grid">
+                              <article className="qa-block qa-nested pie-card">
+                                {renderPieChart(
+                                  [
+                                    { label: 'Korrekt', count: Number(task.correct || 0) },
+                                    { label: 'Falsch', count: Number(task.incorrect || 0) },
+                                  ],
+                                  (row) => row.label,
+                                  'Keine Task-Daten vorhanden.'
+                                )}
+                              </article>
+                            </div>
+                          </div>
+                          <div className="qa-answer-list">
+                            <div className="pie-cards-grid">
+                              {(task.steps || []).map((step) => (
+                                <article key={`${task.task_id}-${step.step_index}`} className="qa-block qa-nested pie-card">
+                                <div className="list-row">
+                                  <span>
+                                    Schritt {Number(step.step_index || 0) + 1}: {step.prompt || '-'}
+                                  </span>
+                                  <small>
+                                    n: {step.total ?? 0} • korrekt: {step.correct ?? 0} • falsch geklickt: {step.incorrect_click ?? 0} • Zeit abgelaufen: {step.timed_out ?? 0} • Quote: {step.correct_rate ?? 0}%
+                                  </small>
+                                </div>
+                                {renderPieChart(
+                                  [
+                                    { label: 'Korrekt', count: Number(step.correct || 0) },
+                                    { label: 'Falsch geklickt', count: Number(step.incorrect_click || 0) },
+                                    { label: 'Zeit abgelaufen', count: Number(step.timed_out || 0) },
+                                  ],
+                                  (row) => row.label,
+                                  'Keine Daten für diesen Schritt.'
+                                )}
+                                </article>
+                              ))}
+                            </div>
                           </div>
                         </section>
                       ))}
-                      <section className="qa-block modules-data-grid-full">
-                        <p className="qa-question">Diagramm: Korrektquote je Aufgabenstellung</p>
-                        {renderCountBars(
-                          (overview.task_work?.tasks || []).flatMap((task) =>
-                            (task.steps || []).map((step) => ({
-                              label: `${task.title} - S${Number(step.step_index || 0) + 1}`,
-                              count: Number(step.correct_rate || 0),
-                            }))
-                          ),
-                          (row) => row.label,
-                          'Keine Aufgabenstellungs-Daten vorhanden.'
-                        )}
-                      </section>
                     </div>
                   ) : (
                     <p>Keine Aufgaben-Daten vorhanden.</p>

@@ -62,6 +62,10 @@ export function SessionPage() {
   const [taskResponses, setTaskResponses] = useState({});
   const [taskHtmlByPath, setTaskHtmlByPath] = useState({});
   const [taskActiveStepById, setTaskActiveStepById] = useState({});
+  const [taskStepStartedAtByKey, setTaskStepStartedAtByKey] = useState({});
+  const [taskEndedById, setTaskEndedById] = useState({});
+  const [nowMs, setNowMs] = useState(Date.now());
+  const taskTimeoutInFlightRef = useRef(new Set());
   const [questionAnswers, setQuestionAnswers] = useState({});
   const [cardAssignments, setCardAssignments] = useState({});
   const [customColumns, setCustomColumns] = useState([]);
@@ -71,10 +75,12 @@ export function SessionPage() {
   const [draggedCardId, setDraggedCardId] = useState('');
   const [snapCardId, setSnapCardId] = useState('');
   const snapTimerRef = useRef(null);
+  const taskEndRedirectTimerRef = useRef(null);
   const [imageInputs, setImageInputs] = useState({});
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
   const [activeModule, setActiveModule] = useState('');
+  const [activeTaskIndex, setActiveTaskIndex] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -139,6 +145,8 @@ export function SessionPage() {
                 selected_ids: Array.isArray(entry.selected_ids) ? entry.selected_ids : [],
                 is_correct: !!entry.is_correct,
                 result_status: entry.result_status || 'incorrect',
+                timed_out: !!entry.timed_out,
+                timeout_note: entry.timeout_note || '',
               },
             ])
           )
@@ -162,6 +170,7 @@ export function SessionPage() {
   useEffect(
     () => () => {
       if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+      if (taskEndRedirectTimerRef.current) clearTimeout(taskEndRedirectTimerRef.current);
     },
     []
   );
@@ -264,6 +273,136 @@ export function SessionPage() {
       setTaskHtmlByPath(Object.fromEntries(loadedEntries));
     })();
   }, [tasks]);
+
+  const getTaskSteps = (task) => {
+    const sorted = Array.isArray(task.steps) && task.steps.length > 0
+      ? [...task.steps].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
+      : [];
+    if (sorted.length > 0) return sorted;
+    return [{ prompt: task.description || '', order_index: 0, correct_ids: task.config?.interactive?.correct_ids || [] }];
+  };
+
+  const getActiveTaskStepIndex = (task) => {
+    const taskId = String(task._id);
+    const taskSteps = getTaskSteps(task);
+    const firstOpenStepIdx = taskSteps.findIndex((_, idx) => !taskResponses[`${taskId}:${idx}`]);
+    const defaultStepIdx = firstOpenStepIdx === -1 ? Math.max(taskSteps.length - 1, 0) : firstOpenStepIdx;
+    const stepFromUi = Number(taskActiveStepById[taskId]);
+    if (Number.isFinite(stepFromUi) && stepFromUi >= 0 && stepFromUi < taskSteps.length) {
+      return stepFromUi;
+    }
+    return defaultStepIdx;
+  };
+
+  useEffect(() => {
+    if (!session || session.status === 'done') return;
+    const hasTimedStep = tasks.some((task) => {
+      const taskId = String(task._id);
+      if (taskEndedById[taskId]) return false;
+      const steps = getTaskSteps(task);
+      const idx = getActiveTaskStepIndex(task);
+      const step = steps[idx];
+      const key = `${taskId}:${idx}`;
+      return Number(step?.time_limit_sec || 0) > 0 && !taskResponses[key];
+    });
+    if (!hasTimedStep) return;
+    const timer = setInterval(() => setNowMs(Date.now()), 500);
+    return () => clearInterval(timer);
+  }, [session, tasks, taskResponses, taskActiveStepById, taskEndedById]);
+
+  useEffect(() => {
+    if (!session || session.status === 'done') return;
+    setTaskStepStartedAtByKey((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const task of tasks) {
+        const taskId = String(task._id);
+        if (taskEndedById[taskId]) continue;
+        const idx = getActiveTaskStepIndex(task);
+        const step = getTaskSteps(task)[idx];
+        const limit = Number(step?.time_limit_sec || 0);
+        const key = `${taskId}:${idx}`;
+        if (limit > 0 && !taskResponses[key] && !next[key]) {
+          next[key] = Date.now();
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [session, tasks, taskResponses, taskActiveStepById, taskEndedById]);
+
+  useEffect(() => {
+    if (!session || session.status === 'done') return;
+    (async () => {
+      for (const task of tasks) {
+        const taskId = String(task._id);
+        if (taskEndedById[taskId]) continue;
+        const steps = getTaskSteps(task);
+        const activeIdx = getActiveTaskStepIndex(task);
+        const activeStep = steps[activeIdx];
+        const limit = Number(activeStep?.time_limit_sec || 0);
+        if (limit <= 0) continue;
+        const key = `${taskId}:${activeIdx}`;
+        if (taskResponses[key]) continue;
+        const startedAt = Number(taskStepStartedAtByKey[key] || 0);
+        if (!startedAt) continue;
+        const elapsedSec = Math.floor((nowMs - startedAt) / 1000);
+        if (elapsedSec < limit) continue;
+        if (taskTimeoutInFlightRef.current.has(key)) continue;
+        taskTimeoutInFlightRef.current.add(key);
+        try {
+          const result = await researchApi.submitTaskResponse({
+            session_id: session._id,
+            task_id: taskId,
+            step_index: activeIdx,
+            selected_ids: [],
+            timed_out: true,
+          });
+          setTaskResponses((prev) => ({
+            ...prev,
+            [key]: {
+              selected_ids: result.selected_ids || [],
+              is_correct: !!result.is_correct,
+              result_status: result.result_status || 'incorrect',
+              timed_out: !!result.timed_out,
+              timeout_note: result.timeout_note || 'User konnte keine Angabe in definiertem Zeitrahmen treffen.',
+            },
+          }));
+
+          if (activeIdx >= steps.length - 1) {
+            setTaskEndedById((prev) => ({ ...prev, [taskId]: true }));
+            setMessageType('error');
+            setMessage(`Zeitlimit erreicht: "${task.title}" wurde automatisch beendet.`);
+            if (!taskEndRedirectTimerRef.current) {
+              taskEndRedirectTimerRef.current = setTimeout(() => {
+                navigate('/');
+              }, 3000);
+            }
+          } else {
+            setTaskActiveStepById((prev) => ({ ...prev, [taskId]: activeIdx + 1 }));
+            setMessageType('error');
+            setMessage(`Zeitlimit erreicht: "${task.title}" springt zu Schritt ${activeIdx + 2}.`);
+          }
+        } catch (err) {
+          setMessageType('error');
+          setMessage(err.message || 'Aufgaben-Timer konnte nicht gespeichert werden.');
+        } finally {
+          taskTimeoutInFlightRef.current.delete(key);
+        }
+      }
+    })();
+  }, [nowMs, session, tasks, taskResponses, taskStepStartedAtByKey, taskActiveStepById, taskEndedById]);
+
+  useEffect(() => {
+    if (!tasks.length) {
+      setActiveTaskIndex(0);
+      return;
+    }
+    setActiveTaskIndex((prev) => {
+      if (Number.isFinite(prev) && prev >= 0 && prev < tasks.length) return prev;
+      return 0;
+    });
+  }, [tasks.length]);
 
   const saveQuestionnaire = async () => {
     if (!session) return;
@@ -491,6 +630,8 @@ export function SessionPage() {
           selected_ids: result.selected_ids || [],
           is_correct: !!result.is_correct,
           result_status: result.result_status || 'incorrect',
+          timed_out: !!result.timed_out,
+          timeout_note: result.timeout_note || '',
         },
       }));
       setMessageType(result.is_correct ? 'success' : 'error');
@@ -500,6 +641,21 @@ export function SessionPage() {
       setMessage(err.message || 'Antwort konnte nicht gespeichert werden.');
     }
   };
+  const isTaskComplete = (task) => {
+    const interactiveIds = Array.isArray(task?.config?.interactive?.selectable_ids)
+      ? task.config.interactive.selectable_ids
+      : [];
+    if (interactiveIds.length === 0) return true;
+    const taskId = String(task._id);
+    const taskSteps = getTaskSteps(task);
+    for (let idx = 0; idx < taskSteps.length; idx += 1) {
+      if (!taskResponses[`${taskId}:${idx}`]) return false;
+    }
+    return true;
+  };
+
+  const safeTaskIndex = tasks.length > 0 ? Math.min(activeTaskIndex, tasks.length - 1) : 0;
+  const activeTask = tasks[safeTaskIndex] || null;
 
   return (
     <div className="session-grid">
@@ -532,48 +688,71 @@ export function SessionPage() {
 
       {tasks.length > 0 && (
         <CardPanel>
-          {tasks.map((task) => (
-            <div key={task._id} className="task-view-item">
+          <div className="session-topbar">
+            <div className="module-tabs">
+              <button
+                type="button"
+                className="ghost-btn"
+                disabled={safeTaskIndex <= 0}
+                onClick={() => setActiveTaskIndex((prev) => Math.max(0, prev - 1))}
+              >
+                Aufgabe zurück
+              </button>
+              <button
+                type="button"
+                className="ghost-btn"
+                disabled={safeTaskIndex >= tasks.length - 1}
+                onClick={() => setActiveTaskIndex((prev) => Math.min(tasks.length - 1, prev + 1))}
+              >
+                Aufgabe weiter
+              </button>
+            </div>
+            <small>
+              Aufgabe {safeTaskIndex + 1} von {tasks.length}
+            </small>
+          </div>
+
+          {activeTask && (
+            <div key={activeTask._id} className="task-view-item">
               {(() => {
-                const files = getTaskFiles(task);
-                const interactiveIds = Array.isArray(task.config?.interactive?.selectable_ids)
-                  ? task.config.interactive.selectable_ids
+                const files = getTaskFiles(activeTask);
+                const interactiveIds = Array.isArray(activeTask.config?.interactive?.selectable_ids)
+                  ? activeTask.config.interactive.selectable_ids
                   : [];
-                const configuredFilePath = String(task.config?.interactive?.file_path || '');
+                const configuredFilePath = String(activeTask.config?.interactive?.file_path || '');
                 const htmlFile = files.find((f) => f.format === 'html' && f.path === configuredFilePath)
                   || files.find((f) => f.format === 'html' && f.path);
                 const interactiveEnabled = interactiveIds.length > 0 && !!htmlFile?.path;
-                const taskId = String(task._id);
-                const taskSteps = Array.isArray(task.steps) && task.steps.length > 0
-                  ? [...task.steps].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
-                  : [{ prompt: task.description || '', order_index: 0, correct_ids: task.config?.interactive?.correct_ids || [] }];
+                const taskId = String(activeTask._id);
+                const taskSteps = getTaskSteps(activeTask);
                 const firstStepText = taskSteps[0]?.prompt || '';
                 const showTaskDescription =
-                  !!String(task.description || '').trim() &&
-                  normalizeTextForCompare(task.description) !== normalizeTextForCompare(firstStepText);
-                const firstOpenStepIdx = taskSteps.findIndex((_, idx) => !taskResponses[`${taskId}:${idx}`]);
-                const defaultStepIdx = firstOpenStepIdx === -1 ? Math.max(taskSteps.length - 1, 0) : firstOpenStepIdx;
-                const stepFromUi = Number(taskActiveStepById[taskId]);
-                const activeStepIdx =
-                  Number.isFinite(stepFromUi) && stepFromUi >= 0 && stepFromUi < taskSteps.length
-                    ? stepFromUi
-                    : defaultStepIdx;
+                  !!String(activeTask.description || '').trim() &&
+                  normalizeTextForCompare(activeTask.description) !== normalizeTextForCompare(firstStepText);
+                const activeStepIdx = getActiveTaskStepIndex(activeTask);
                 const activeStep = taskSteps[activeStepIdx] || { prompt: '' };
                 const responseKey = `${taskId}:${activeStepIdx}`;
                 const selectedIds = Array.isArray(taskResponses[responseKey]?.selected_ids)
                   ? taskResponses[responseKey].selected_ids
                   : [];
                 const taskResult = taskResponses[responseKey];
+                const taskEnded = !!taskEndedById[taskId];
+                const activeStepLimitSec = Number(activeStep?.time_limit_sec || 0);
+                const startedAt = Number(taskStepStartedAtByKey[responseKey] || 0);
+                const elapsedSec = startedAt ? Math.floor((nowMs - startedAt) / 1000) : 0;
+                const remainingSec = activeStepLimitSec > 0 ? Math.max(0, activeStepLimitSec - elapsedSec) : 0;
+                const currentTaskComplete = isTaskComplete(activeTask);
 
                 return (
                   <>
-              <h4>Aufgabe: {task.title}</h4>
-              {showTaskDescription && <p>Aufgabenbeschreibung: {task.description}</p>}
+              <h4>Aufgabe: {activeTask.title}</h4>
+              {showTaskDescription && <p>Aufgabenbeschreibung: {activeTask.description}</p>}
+              <small>Status: {currentTaskComplete ? 'abgeschlossen' : 'in Bearbeitung'}</small>
               {files.map((file, idx) => (
-                <div key={`${task._id}-file-${idx}`} className="task-file-render">
+                <div key={`${activeTask._id}-file-${idx}`} className="task-file-render">
                   {file.format === 'pdf' && (
                     <iframe
-                      title={`task-pdf-${task._id}-${idx}`}
+                      title={`task-pdf-${activeTask._id}-${idx}`}
                       src={`${API_BASE}${file.path}`}
                       className="task-frame"
                     />
@@ -619,7 +798,7 @@ export function SessionPage() {
                       <button
                         type="button"
                         className="ghost-btn"
-                        disabled={activeStepIdx <= 0}
+                        disabled={activeStepIdx <= 0 || taskEnded}
                         onClick={() =>
                           setTaskActiveStepById((prev) => ({ ...prev, [taskId]: Math.max(0, activeStepIdx - 1) }))
                         }
@@ -629,7 +808,7 @@ export function SessionPage() {
                       <button
                         type="button"
                         className="ghost-btn"
-                        disabled={activeStepIdx >= taskSteps.length - 1}
+                        disabled={activeStepIdx >= taskSteps.length - 1 || taskEnded}
                         onClick={() =>
                           setTaskActiveStepById((prev) => ({
                             ...prev,
@@ -641,12 +820,17 @@ export function SessionPage() {
                       </button>
                     </div>
                   )}
+                  {activeStepLimitSec > 0 && !taskResult && !taskEnded && !isReadOnly && (
+                    <p className="task-timer">
+                      Zeit verbleibend: <strong>{remainingSec}s</strong>
+                    </p>
+                  )}
                   <small>Klicke direkt in der HTML-Vorschau auf das passende Element.</small>
                   {taskHtmlByPath[htmlFile.path] && (
                     <div
                       className="task-html-interactive"
                       onClick={async (event) => {
-                        if (isReadOnly) return;
+                        if (isReadOnly || taskEnded) return;
                         const summaryTarget = event.target.closest('details > summary');
                         if (summaryTarget) {
                           event.preventDefault();
@@ -671,17 +855,24 @@ export function SessionPage() {
                           ? String(dataTarget.getAttribute('data-answer-id') || '').trim()
                           : String(linkTarget.getAttribute('href') || '').trim();
                         if (!answerId || !interactiveIds.includes(answerId)) return;
-                        await selectAndPersistTaskAnswer(task, activeStepIdx, answerId, interactiveIds);
+                        await selectAndPersistTaskAnswer(activeTask, activeStepIdx, answerId, interactiveIds);
                       }}
                       dangerouslySetInnerHTML={{ __html: taskHtmlByPath[htmlFile.path] }}
                     />
                   )}
                   {taskResult && (
                     <p
-                      className={taskResult.is_correct ? 'info-text success' : 'info-text error'}
+                      className={taskResult.timed_out ? 'info-text error' : taskResult.is_correct ? 'info-text success' : 'info-text error'}
                     >
-                      {taskResult.is_correct ? 'Ergebnis: korrekt' : 'Ergebnis: falsch'}
+                      {taskResult.timed_out
+                        ? (taskResult.timeout_note || 'Ergebnis: Zeitlimit erreicht.')
+                        : taskResult.is_correct
+                          ? 'Ergebnis: korrekt'
+                          : 'Ergebnis: falsch'}
                     </p>
+                  )}
+                  {taskEnded && (
+                    <p className="info-text error">Aufgabe automatisch beendet (Zeitlimit im letzten Schritt erreicht).</p>
                   )}
                 </div>
               )}
@@ -689,7 +880,7 @@ export function SessionPage() {
                 );
               })()}
             </div>
-          ))}
+          )}
         </CardPanel>
       )}
 

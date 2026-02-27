@@ -38,6 +38,7 @@ export function AdminPage() {
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
   const [taskCorrectIds, setTaskCorrectIds] = useState('');
+  const [taskStepTimeLimitSec, setTaskStepTimeLimitSec] = useState('');
   const [profileCardLabel, setProfileCardLabel] = useState('');
   const [items, setItems] = useState({ questions: [], cards: [], tasks: [] });
   const [profileCards, setProfileCards] = useState([]);
@@ -893,6 +894,11 @@ export function AdminPage() {
             value={taskCorrectIds}
             onChange={(e) => setTaskCorrectIds(e.target.value)}
           />
+          <FormField
+            label="Zeitlimit pro Aufgabenschritt (Sekunden, optional)"
+            value={taskStepTimeLimitSec}
+            onChange={(e) => setTaskStepTimeLimitSec(e.target.value)}
+          />
           <small>
             Für HTML-Interaktion: Nutze im HTML `data-answer-id="..."` an klickbaren Elementen.
             Die HTML-Datei kann nach Upload pro Aufgabe ausgewählt werden.
@@ -919,6 +925,10 @@ export function AdminPage() {
                             .split(',')
                             .map((x) => x.trim())
                             .filter(Boolean),
+                          time_limit_sec:
+                            Number.isFinite(Number(taskStepTimeLimitSec)) && Number(taskStepTimeLimitSec) > 0
+                              ? Math.floor(Number(taskStepTimeLimitSec))
+                              : 0,
                         },
                       ]
                     : [],
@@ -934,6 +944,7 @@ export function AdminPage() {
                 setTaskTitle('');
                 setTaskDescription('');
                 setTaskCorrectIds('');
+                setTaskStepTimeLimitSec('');
                 await loadContent(selectedStudy);
                 showSuccess('Aufgabe erfolgreich erstellt.');
               } catch (err) {
@@ -1160,6 +1171,9 @@ export function AdminPage() {
                         {Array.isArray(step.correct_ids) && step.correct_ids.length > 0 && (
                           <small>Richtige IDs: {step.correct_ids.join(', ')}</small>
                         )}
+                        {Number(step.time_limit_sec || 0) > 0 && (
+                          <small>Zeitlimit: {Number(step.time_limit_sec)} Sek.</small>
+                        )}
                       </div>
                       <div className="row-actions">
                         <button
@@ -1205,12 +1219,22 @@ export function AdminPage() {
                               Array.isArray(step.correct_ids) ? step.correct_ids.join(', ') : ''
                             );
                             if (correct === null) return;
+                            const limitRaw = window.prompt(
+                              'Zeitlimit in Sekunden (0 = kein Limit)',
+                              String(Number(step.time_limit_sec || 0))
+                            );
+                            if (limitRaw === null) return;
+                            const nextLimit =
+                              Number.isFinite(Number(limitRaw)) && Number(limitRaw) > 0
+                                ? Math.floor(Number(limitRaw))
+                                : 0;
                             const nextSteps = taskSteps.map((s, i) =>
                               i === idx
                                 ? {
                                     ...s,
                                     prompt: prompt.trim(),
                                     correct_ids: correct.split(',').map((x) => x.trim()).filter(Boolean),
+                                    time_limit_sec: nextLimit,
                                   }
                                 : s
                             );
@@ -1249,12 +1273,19 @@ export function AdminPage() {
                       if (!prompt || !prompt.trim()) return;
                       const correct = window.prompt('Richtige Antwort-IDs (Komma-getrennt)', '');
                       if (correct === null) return;
+                      const limitRaw = window.prompt('Zeitlimit in Sekunden (0 = kein Limit)', '0');
+                      if (limitRaw === null) return;
+                      const nextLimit =
+                        Number.isFinite(Number(limitRaw)) && Number(limitRaw) > 0
+                          ? Math.floor(Number(limitRaw))
+                          : 0;
                       const nextSteps = [
                         ...taskSteps,
                         {
                           prompt: prompt.trim(),
                           order_index: taskSteps.length,
                           correct_ids: correct.split(',').map((x) => x.trim()).filter(Boolean),
+                          time_limit_sec: nextLimit,
                         },
                       ];
                       await adminApi.updateTask(t._id, {

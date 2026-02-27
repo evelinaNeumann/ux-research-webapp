@@ -132,6 +132,10 @@ function normalizeTaskSteps(stepsValue = [], fallbackDescription = '') {
       correct_ids: Array.isArray(step?.correct_ids)
         ? step.correct_ids.map((x) => String(x || '').trim()).filter(Boolean)
         : [],
+      time_limit_sec:
+        Number.isFinite(Number(step?.time_limit_sec)) && Number(step?.time_limit_sec) > 0
+          ? Math.floor(Number(step.time_limit_sec))
+          : 0,
     }))
     .filter((step) => step.prompt);
   if (!normalized.length && String(fallbackDescription || '').trim()) {

@@ -10,6 +10,7 @@ Dieses Dokument beschreibt die benötigten Collections für den aktuellen Funkti
 - `user_study_profiles`
 - `questions`
 - `cards`
+- `card_sort_columns`
 - `image_assets`
 - `page_tree_nodes`
 - `research_tasks`
@@ -17,6 +18,7 @@ Dieses Dokument beschreibt die benötigten Collections für den aktuellen Funkti
 - `answers`
 - `card_sorts`
 - `image_ratings`
+- `taskresponses`
 - `analytics_snapshots` (optional)
 - `test_groups` (optional / Erweiterung)
 
@@ -26,10 +28,10 @@ Dieses Dokument beschreibt die benötigten Collections für den aktuellen Funkti
 - `study_assignments`: Zuweisung User <-> Studie
 - `study_profile_cards`: 8 Schlüsselwort-Karten je Studie
 - `user_study_profiles`: Profilangaben je User je Studie
-- `questions`, `cards`, `image_assets`: Modul-Content
+- `questions`, `cards`, `card_sort_columns`, `image_assets`: Modul-Content
 - `page_tree_nodes`, `research_tasks`: Struktur/Aufgaben
 - `sessions`: Bearbeitungsstatus pro Studie/User
-- `answers`, `card_sorts`, `image_ratings`: Research-Ergebnisse
+- `answers`, `card_sorts`, `image_ratings`, `taskresponses`: Research-Ergebnisse
 - `analytics_snapshots`: optionales Caching für Analytics
 
 ## Wichtige Indexe (Beispiele)
@@ -53,6 +55,8 @@ db.sessions.createIndex({ status: 1 });
 db.answers.createIndex({ study_id: 1, user_id: 1, created_at: -1 });
 db.card_sorts.createIndex({ study_id: 1, user_id: 1, created_at: -1 });
 db.image_ratings.createIndex({ study_id: 1, user_id: 1, created_at: -1 });
+db.taskresponses.createIndex({ session_id: 1, task_id: 1, step_index: 1 }, { unique: true });
+db.taskresponses.createIndex({ study_id: 1, user_id: 1, updated_at: -1 });
 
 // optional snapshot cache
 db.analytics_snapshots.createIndex({ scope_type: 1, scope_id: 1, generated_at: -1 });
@@ -62,7 +66,8 @@ db.analytics_snapshots.createIndex({ scope_type: 1, scope_id: 1, generated_at: -
 Wenn Neuaufbau ohne Historie:
 - `users`, `studies`, `study_assignments`, `study_profile_cards`, `user_study_profiles`
 - `questions`, `cards`, `image_assets`
-- `sessions`, `answers`, `card_sorts`, `image_ratings`
+- `card_sort_columns`
+- `sessions`, `answers`, `card_sorts`, `image_ratings`, `taskresponses`
 
 Danach optional ergänzen:
 - `page_tree_nodes`, `research_tasks`, `analytics_snapshots`, `test_groups`

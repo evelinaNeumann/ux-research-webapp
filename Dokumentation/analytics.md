@@ -7,6 +7,8 @@
 - `image_ratings`
 - `user_study_profiles`
 - `questions`
+- `research_tasks`
+- `task_responses`
 
 ## 2. KPI-Logik
 - `sessions_total`: Anzahl Sessions im Filterraum.
@@ -37,6 +39,17 @@
     - `custom_cards_by_column[]`
     - `custom_cards_by_label[]`
 - Bildauswertung: Durchschnitt + N pro Bild.
+- Aufgabenbearbeitung:
+  - Basis: `research_tasks.steps[]` (Reihenfolge über `order_index`)
+  - Antworten: `task_responses` je `(session_id, task_id, step_index)` (unique)
+  - Schrittmetriken:
+    - `total`
+    - `correct`
+    - `incorrect_click` (falsch geklickt, ohne Timeout)
+    - `timed_out` (Zeit abgelaufen)
+    - `incorrect` (= `incorrect_click + timed_out`)
+    - `correct_rate`
+  - Taskmetriken aggregieren die Schrittmetriken.
 
 ## 5. Profilfilter (global für Analytics)
 Filter: `age`, `role`, `keyword`
@@ -64,11 +77,16 @@ Filter: `age`, `role`, `keyword`
 ### 7.3 Studienmodule
 - `GET /analytics/study/:studyId/modules/export?format=json|pdf`
 - Enthält KPI + Interview + Card Sorting (inkl. Verteilungen/User-Ideen) + Bildauswertung.
+- Enthält zusätzlich Aufgabenbearbeitung.
 - PDF enthält zusätzlich Diagramme:
   - KPI/Interview/Bildauswertung als Balkendiagramme
-  - Card-Sorting-Zuordnungen als Kreisdiagramme
+- Card-Sorting-Zuordnungen als Kreisdiagramme
+- Aufgabenbearbeitung als Kreisdiagramme:
+  - pro Task Gesamt korrekt/falsch
+  - pro Schritt korrekt/falsch geklickt/Zeit abgelaufen
 - JSON enthält zusätzlich ein `charts`-Objekt mit `labels[]` und `series[]` je Diagrammblock.
 - Card Sorting im Report enthält zusätzlich `Card -> Spalten` Diagramme (Häufigkeit pro Card und Zielspalte).
+- Aufgaben-Reporttext unterscheidet explizit zwischen `falsch geklickt` und `Zeit abgelaufen`.
 
 ## 8. Chart Payload
 Standardformat:

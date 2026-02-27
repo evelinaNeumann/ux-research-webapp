@@ -421,6 +421,20 @@ button.chip-item {
   color: #475569;
 }
 
+.task-timer {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.84rem;
+}
+
 .step-nav {
   display: flex;
   gap: 0.45rem;

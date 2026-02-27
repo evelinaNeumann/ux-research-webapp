@@ -12,6 +12,7 @@ const researchTaskSchema = new mongoose.Schema(
           prompt: { type: String, required: true },
           order_index: { type: Number, default: 0 },
           correct_ids: { type: [String], default: [] },
+          time_limit_sec: { type: Number, default: 0 },
         },
       ],
       default: [],

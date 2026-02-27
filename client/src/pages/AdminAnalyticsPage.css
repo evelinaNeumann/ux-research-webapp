@@ -125,6 +125,16 @@
   background: #fafbfe;
 }
 
+.pie-cards-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pie-card {
+  margin-top: 0;
+}
+
 .pie-block {
   display: grid;
   gap: 0.7rem;
@@ -287,4 +297,10 @@
 .dist-value {
   font-size: 0.82rem;
   color: #0f172a;
+}
+
+@media (max-width: 900px) {
+  .pie-cards-grid {
+    grid-template-columns: 1fr;
+  }
 }

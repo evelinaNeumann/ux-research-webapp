@@ -278,7 +278,7 @@ export async function analyticsOverview(filters = {}) {
     ResearchTask.find(filters.studyId ? { study_id: studyMatch } : {}, { _id: 1, title: 1, description: 1, steps: 1 })
       .sort({ order_index: 1, _id: 1 })
       .lean(),
-    TaskResponse.find(taskMatch, { task_id: 1, step_index: 1, is_correct: 1 }).lean(),
+    TaskResponse.find(taskMatch, { task_id: 1, step_index: 1, is_correct: 1, timed_out: 1 }).lean(),
   ]);
   const responsesByTaskStep = new Map();
   for (const row of taskResponses) {
@@ -295,12 +295,16 @@ export async function analyticsOverview(filters = {}) {
       const rows = responsesByTaskStep.get(key) || [];
       const total = rows.length;
       const correct = rows.filter((x) => !!x.is_correct).length;
-      const incorrect = total - correct;
+      const timed_out = rows.filter((x) => !!x.timed_out).length;
+      const incorrect_click = rows.filter((x) => !x.is_correct && !x.timed_out).length;
+      const incorrect = incorrect_click + timed_out;
       return {
         step_index: idx,
         prompt: String(step?.prompt || '').trim() || `Schritt ${idx + 1}`,
         total,
         correct,
+        incorrect_click,
+        timed_out,
         incorrect,
         correct_rate: total > 0 ? Number(((correct / total) * 100).toFixed(2)) : 0,
       };
@@ -311,6 +315,8 @@ export async function analyticsOverview(filters = {}) {
       steps: stepStats,
       total: stepStats.reduce((sum, s) => sum + (s.total || 0), 0),
       correct: stepStats.reduce((sum, s) => sum + (s.correct || 0), 0),
+      incorrect_click: stepStats.reduce((sum, s) => sum + (s.incorrect_click || 0), 0),
+      timed_out: stepStats.reduce((sum, s) => sum + (s.timed_out || 0), 0),
       incorrect: stepStats.reduce((sum, s) => sum + (s.incorrect || 0), 0),
     };
   });
@@ -396,6 +402,8 @@ export function flattenExport(overview, filters = {}) {
         value: step.prompt || '',
         count: step.total || 0,
         correct: step.correct || 0,
+        incorrectClick: step.incorrect_click || 0,
+        timedOut: step.timed_out || 0,
         incorrect: step.incorrect || 0,
         correctRate: step.correct_rate || 0,
         group: filters.testGroup || '',

@@ -6,6 +6,9 @@
 - `POST /auth/login`
 - `POST /auth/logout`
 - `POST /auth/change-password`
+- `POST /auth/forgot-password`
+- `GET /auth/password-reset-status/:username`
+- `POST /auth/reset-password-with-username`
 - `GET /auth/me`
 
 ## Studies
@@ -26,7 +29,7 @@
 - `GET /sessions`
 - `GET /sessions/:id`
 - `PUT /sessions/:id/complete`
-  - validiert vollständige Interview-Beantwortung
+  - validiert vollständige Pflichtmodule (inkl. interaktive Aufgaben-Schritte)
 
 ## Profiles
 - `GET /profiles/options`
@@ -42,6 +45,8 @@
 - `GET /cardsort/session/:sessionId`
 - `POST /image-rating`
 - `GET /image-rating/session/:sessionId`
+- `POST /task-response`
+- `GET /task-response/session/:sessionId`
 
 ## Admin Content (`/admin`, admin-only)
 ### Users
@@ -50,6 +55,8 @@
 - `DELETE /admin/users/:userId`
 - `GET /admin/users/:userId/profiles`
 - `PUT /admin/users/:userId/profiles/:studyId`
+- `GET /admin/users/password-reset-requests`
+- `POST /admin/users/:userId/password-reset-decision`
 
 ### Assignments
 - `GET /admin/studies/:studyId/assignments`
@@ -92,6 +99,8 @@
 - `POST /admin/studies/:studyId/tasks`
 - `PUT /admin/tasks/:taskId`
 - `DELETE /admin/tasks/:taskId`
+- `POST /admin/tasks/:taskId/attachment` (multipart `files[]`, PDF/HTML, mehrfach)
+- `DELETE /admin/tasks/:taskId/attachment` (body: `path`)
 
 ### Content Version
 - `POST /admin/studies/:studyId/content/publish`

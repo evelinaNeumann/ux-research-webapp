@@ -374,12 +374,12 @@ function toModulePdfEntries(report) {
     taskItems.forEach((task, taskIdx) => {
       push(`${taskIdx + 1}. Task: ${task.title}`, { bold: true, size: 11 });
       push(
-        `Gesamt: ${task.total ?? 0} | korrekt: ${task.correct ?? 0} | falsch: ${task.incorrect ?? 0}`,
+        `Gesamt: ${task.total ?? 0} | korrekt: ${task.correct ?? 0} | falsch geklickt: ${task.incorrect_click ?? 0} | Zeit abgelaufen: ${task.timed_out ?? 0}`,
         { size: 10, indent: 16 }
       );
       (task.steps || []).forEach((step) => {
         push(
-          `- Schritt ${Number(step.step_index || 0) + 1}: ${step.prompt || '-'} | n: ${step.total ?? 0} | korrekt: ${step.correct ?? 0} | falsch: ${step.incorrect ?? 0} | Quote: ${step.correct_rate ?? 0}%`,
+          `- Schritt ${Number(step.step_index || 0) + 1}: ${step.prompt || '-'} | n: ${step.total ?? 0} | korrekt: ${step.correct ?? 0} | falsch geklickt: ${step.incorrect_click ?? 0} | Zeit abgelaufen: ${step.timed_out ?? 0} | Quote: ${step.correct_rate ?? 0}%`,
           { size: 10, indent: 20, wrap: true }
         );
       });

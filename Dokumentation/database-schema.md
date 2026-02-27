@@ -18,9 +18,10 @@
   _id,
   name,
   description,
-  type,               // 'questionnaire' | 'card_sort' | 'image_rating' | 'mixed'
+  type,               // 'questionnaire' | 'card_sort' | 'image_rating' | 'task_work' | 'mixed'
   version,
   is_active,
+  assign_to_all_users,
   module_order: [String],
   brief_pdf_path,
   brief_pdf_name,
@@ -147,10 +148,47 @@
   title,
   description,
   task_type,
-  config: {},
+  config: {
+    interactive: {
+      enabled,
+      selectable_ids: [String],
+      correct_ids: [String],
+      file_path
+    }
+  },
+  steps: [{
+    prompt,
+    order_index,
+    correct_ids: [String],
+    time_limit_sec
+  }],
+  content_format,      // 'none' | 'pdf' | 'html'
+  attachment_path,
+  attachment_name,
+  attachment_mime,
+  attachments: [{ path, name, mime, format, uploaded_at }],
   order_index,
   is_required,
   version
+}
+```
+
+## task_responses
+```js
+{
+  _id,
+  session_id,
+  user_id,
+  study_id,
+  task_id,
+  step_index,
+  selected_ids: [String],
+  is_correct,
+  result_status,      // 'correct' | 'incorrect'
+  timed_out,
+  timeout_note,
+  created_at,
+  updated_at
 }
 ```
 
@@ -215,4 +253,7 @@
 - `image_ratings`: `{ study_id: 1, user_id: 1, created_at: -1 }`
 - `study_profile_cards`: `{ study_id: 1, order_index: 1 }`
 - `user_study_profiles`: `{ user_id: 1, study_id: 1 }` unique
+- `research_tasks`: `{ study_id: 1, page_node_id: 1, order_index: 1 }`
+- `task_responses`: `{ session_id: 1, task_id: 1, step_index: 1 }` unique
+- `task_responses`: `{ study_id: 1, user_id: 1, updated_at: -1 }`
 - `analytics_snapshots`: `{ scope_type: 1, scope_id: 1, generated_at: -1 }`
