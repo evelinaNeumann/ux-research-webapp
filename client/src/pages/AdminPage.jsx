@@ -36,6 +36,7 @@ export function AdminPage() {
   const [cardLabel, setCardLabel] = useState('');
   const [cardSortColumnLabel, setCardSortColumnLabel] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
+  const [taskSummary, setTaskSummary] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
   const [taskCorrectIds, setTaskCorrectIds] = useState('');
   const [taskStepTimeLimitSec, setTaskStepTimeLimitSec] = useState('');
@@ -45,6 +46,10 @@ export function AdminPage() {
   const [cardSortColumns, setCardSortColumns] = useState([]);
   const [taskUploadFiles, setTaskUploadFiles] = useState({});
   const [taskDragOverId, setTaskDragOverId] = useState('');
+  const [taskStepDrag, setTaskStepDrag] = useState({ taskId: '', index: -1 });
+  const [showClickableIdsByTask, setShowClickableIdsByTask] = useState({});
+  const [taskMenuOpenId, setTaskMenuOpenId] = useState('');
+  const [taskFileMenuOpenId, setTaskFileMenuOpenId] = useState('');
   const [studyManagementOpen, setStudyManagementOpen] = useState(true);
   const [assignmentOpen, setAssignmentOpen] = useState(true);
   const [contentConfigOpen, setContentConfigOpen] = useState(true);
@@ -881,12 +886,21 @@ export function AdminPage() {
           <CardPanel title="Aufgaben">
           <FormField label="Task Titel" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
           <label className="form-field task-description-field">
-            <span>Aufgabenstellung</span>
+            <span>Aufgabenbeschreibung</span>
+            <textarea
+              rows={3}
+              value={taskSummary}
+              onChange={(e) => setTaskSummary(e.target.value)}
+              placeholder="Kurze Beschreibung zur Aufgabe"
+            />
+          </label>
+          <label className="form-field task-description-field">
+            <span>Erste Aufgabenstellung (Schritt 1)</span>
             <textarea
               rows={4}
               value={taskDescription}
               onChange={(e) => setTaskDescription(e.target.value)}
-              placeholder="Aufgabe formulieren"
+              placeholder="Konkrete Aufgabenanweisung für Schritt 1"
             />
           </label>
           <FormField
@@ -914,7 +928,7 @@ export function AdminPage() {
                 }
                 await adminApi.createTask(selectedStudy, {
                   title,
-                  description: taskDescription.trim(),
+                  description: taskSummary.trim(),
                   task_type: 'instruction',
                   steps: taskDescription.trim()
                     ? [
@@ -942,6 +956,7 @@ export function AdminPage() {
                   },
                 });
                 setTaskTitle('');
+                setTaskSummary('');
                 setTaskDescription('');
                 setTaskCorrectIds('');
                 setTaskStepTimeLimitSec('');
@@ -962,309 +977,359 @@ export function AdminPage() {
                 : [];
             const htmlFiles = taskFiles.filter((file) => file.format === 'html');
             const selectedHtmlPath = String(t.config?.interactive?.file_path || '');
+            const selectedHtmlFile = selectedHtmlPath
+              ? htmlFiles.find((file) => file.path === selectedHtmlPath)
+              : null;
+            const headerFileLabel =
+              selectedHtmlFile?.name ||
+              htmlFiles[0]?.name ||
+              taskFiles[0]?.name ||
+              'Keine Datei ausgewählt';
             const taskSteps = Array.isArray(t.steps)
               ? [...t.steps].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
               : [];
             return (
               <div key={t._id} className="task-item">
-                <div className="item-row">
-                  <div>
+                <div className="task-menu-wrap">
+                  <button
+                    type="button"
+                    className="ghost-btn task-menu-trigger"
+                    onClick={() => setTaskMenuOpenId((prev) => (prev === t._id ? '' : t._id))}
+                  >
+                    ⋯
+                  </button>
+                  {taskMenuOpenId === t._id && (
+                    <div className="task-menu-popover">
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={async () => {
+                          try {
+                            const title = window.prompt('Aufgabe bearbeiten', t.title);
+                            if (!title) return;
+                            const description = window.prompt('Aufgabenstellung bearbeiten', t.description || '');
+                            if (description === null) return;
+                            const correct = window.prompt(
+                              'Richtige Antwort-IDs bearbeiten (Komma-getrennt)',
+                              Array.isArray(t.config?.interactive?.correct_ids)
+                                ? t.config.interactive.correct_ids.join(', ')
+                                : ''
+                            );
+                            if (correct === null) return;
+                            const nextCorrect = correct.split(',').map((x) => x.trim()).filter(Boolean);
+                            await adminApi.updateTask(t._id, {
+                              title: title.trim(),
+                              description: description.trim(),
+                              config: {
+                                ...(t.config || {}),
+                                interactive: {
+                                  ...(t.config?.interactive || {}),
+                                  correct_ids: nextCorrect,
+                                },
+                              },
+                            });
+                            await loadContent(selectedStudy);
+                            setTaskMenuOpenId('');
+                            showSuccess('Aufgabe erfolgreich gespeichert.');
+                          } catch (err) {
+                            showError(err.message || 'Speichern fehlgeschlagen.');
+                          }
+                        }}
+                      >
+                        Aufgabe bearbeiten
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-btn"
+                        onClick={async () => {
+                          const ok = window.confirm('Aufgabe wirklich löschen?');
+                          if (!ok) return;
+                          await adminApi.deleteTask(t._id);
+                          await loadContent(selectedStudy);
+                          setTaskMenuOpenId('');
+                        }}
+                      >
+                        Aufgabe löschen
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="task-head-grid">
+                  <div className="task-head-col">
+                    <small className="task-head-label">Aufgabenname</small>
                     <div className="chip">{t.title}</div>
-                    {t.description && <small className="task-file-meta">{t.description}</small>}
                   </div>
-                  <div className="row-actions">
+                  <div className="task-head-col task-head-col-right">
+                    <small className="task-head-label">Datei</small>
+                    <small className="task-file-meta task-head-file">Interaktive HTML-Datei: {headerFileLabel}</small>
                     <button
                       type="button"
                       className="ghost-btn"
-                      onClick={async () => {
-                        try {
-                          const title = window.prompt('Aufgabe bearbeiten', t.title);
-                          if (!title) return;
-                          const description = window.prompt('Aufgabenstellung bearbeiten', t.description || '');
-                          if (description === null) return;
-                          const correct = window.prompt(
-                            'Richtige Antwort-IDs bearbeiten (Komma-getrennt)',
-                            Array.isArray(t.config?.interactive?.correct_ids)
-                              ? t.config.interactive.correct_ids.join(', ')
-                              : ''
-                          );
-                          if (correct === null) return;
-                          const nextCorrect = correct.split(',').map((x) => x.trim()).filter(Boolean);
-                          await adminApi.updateTask(t._id, {
-                            title: title.trim(),
-                            description: description.trim(),
-                            config: {
-                              ...(t.config || {}),
-                              interactive: {
-                                ...(t.config?.interactive || {}),
-                                correct_ids: nextCorrect,
-                              },
-                            },
-                          });
-                          await loadContent(selectedStudy);
-                          showSuccess('Aufgabe erfolgreich gespeichert.');
-                        } catch (err) {
-                          showError(err.message || 'Speichern fehlgeschlagen.');
-                        }
-                      }}
+                      onClick={() => setTaskFileMenuOpenId((prev) => (prev === t._id ? '' : t._id))}
                     >
-                      Bearbeiten
+                      Datei bearbeiten / anzeigen
                     </button>
-                    <button
-                      type="button"
-                      className="danger-btn"
-                      onClick={async () => {
-                        const ok = window.confirm('Aufgabe wirklich löschen?');
-                        if (!ok) return;
-                        await adminApi.deleteTask(t._id);
-                        await loadContent(selectedStudy);
-                      }}
-                    >
-                      Löschen
-                    </button>
-                  </div>
-                </div>
-                {taskFiles.length > 0 && (
-                  <div className="task-file-actions">
-                    {taskFiles.map((file, idx) => (
-                      <div key={`${t._id}-file-actions-${idx}`} className="task-file-action-row">
-                        <a
-                          href={`${API_BASE}${file.path}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="ghost-btn pdf-link"
-                        >
-                          Datei öffnen {idx + 1}
-                        </a>
-                        <button
-                          type="button"
-                          className="danger-btn"
-                          onClick={async () => {
-                            const ok = window.confirm(`Datei "${file.name}" wirklich löschen?`);
-                            if (!ok) return;
-                            await adminApi.deleteTaskAttachment(t._id, file.path);
-                            await loadContent(selectedStudy);
-                            showSuccess('Datei erfolgreich gelöscht.');
-                          }}
-                        >
-                          Datei löschen
-                        </button>
+
+                    {taskFileMenuOpenId === t._id && (
+                      <div className="task-file-menu">
+                        {taskFiles.length > 0 && (
+                          <div className="task-file-actions">
+                            {taskFiles.map((file, idx) => (
+                              <div key={`${t._id}-file-actions-${idx}`} className="task-file-action-row">
+                                <a
+                                  href={`${API_BASE}${file.path}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="ghost-btn pdf-link"
+                                >
+                                  Datei ansehen {idx + 1}
+                                </a>
+                                <button
+                                  type="button"
+                                  className="danger-btn"
+                                  onClick={async () => {
+                                    const ok = window.confirm(`Datei "${file.name}" wirklich löschen?`);
+                                    if (!ok) return;
+                                    await adminApi.deleteTaskAttachment(t._id, file.path);
+                                    await loadContent(selectedStudy);
+                                    showSuccess('Datei erfolgreich gelöscht.');
+                                  }}
+                                >
+                                  Datei löschen
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="task-upload-block">
+                          <label
+                            className={`dropzone task-dropzone ${taskDragOverId === t._id ? 'is-dragover' : ''}`}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setTaskDragOverId(t._id);
+                            }}
+                            onDragLeave={(e) => {
+                              e.preventDefault();
+                              setTaskDragOverId('');
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setTaskDragOverId('');
+                              const files = Array.from(e.dataTransfer.files || []);
+                              if (files.length === 0) return;
+                              if (files.some((file) => !isTaskFileAllowed(file))) {
+                                showError('Nur PDF oder HTML Dateien sind erlaubt.');
+                                return;
+                              }
+                              setTaskUploadFiles((prev) => ({ ...prev, [t._id]: files }));
+                            }}
+                          >
+                            <input
+                              type="file"
+                              multiple
+                              accept=".pdf,.html,.htm,application/pdf,text/html"
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files || []);
+                                if (files.length === 0) return;
+                                if (files.some((file) => !isTaskFileAllowed(file))) {
+                                  showError('Nur PDF oder HTML Dateien sind erlaubt.');
+                                  return;
+                                }
+                                setTaskUploadFiles((prev) => ({ ...prev, [t._id]: files }));
+                              }}
+                            />
+                            <span>Aufgaben-Dateien (PDF/HTML) auswählen oder hierher ziehen</span>
+                            {taskUploadFiles[t._id]?.length > 0 && (
+                              <small>Ausgewählt: {taskUploadFiles[t._id].map((f) => f.name).join(', ')}</small>
+                            )}
+                          </label>
+                          <button
+                            type="button"
+                            className="primary-btn"
+                            disabled={!taskUploadFiles[t._id]?.length}
+                            onClick={async () => {
+                              try {
+                                if (!taskUploadFiles[t._id]?.length) return;
+                                await adminApi.uploadTaskAttachment(t._id, taskUploadFiles[t._id]);
+                                setTaskUploadFiles((prev) => {
+                                  const next = { ...prev };
+                                  delete next[t._id];
+                                  return next;
+                                });
+                                await loadContent(selectedStudy);
+                                showSuccess('Aufgaben-Datei erfolgreich hochgeladen.');
+                              } catch (err) {
+                                showError(err.message || 'Aufgaben-Datei konnte nicht hochgeladen werden.');
+                              }
+                            }}
+                          >
+                            Datei hinzufügen
+                          </button>
+                        </div>
+                        {htmlFiles.length > 1 && (
+                          <label className="form-field">
+                            <span>Interaktive HTML-Datei</span>
+                            <select
+                              value={selectedHtmlPath}
+                              onChange={async (e) => {
+                                try {
+                                  await adminApi.updateTask(t._id, {
+                                    config: {
+                                      ...(t.config || {}),
+                                      interactive: {
+                                        ...(t.config?.interactive || {}),
+                                        file_path: e.target.value,
+                                      },
+                                    },
+                                  });
+                                  await loadContent(selectedStudy);
+                                  showSuccess('Interaktive HTML-Datei gespeichert.');
+                                } catch (err) {
+                                  showError(err.message || 'HTML-Datei konnte nicht gespeichert werden.');
+                                }
+                              }}
+                            >
+                              <option value="">Bitte auswählen</option>
+                              {htmlFiles.map((file, idx) => (
+                                <option key={`${t._id}-html-${idx}`} value={file.path}>
+                                  {file.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="task-upload-block">
-                  <label
-                    className={`dropzone task-dropzone ${taskDragOverId === t._id ? 'is-dragover' : ''}`}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setTaskDragOverId(t._id);
-                    }}
-                    onDragLeave={(e) => {
-                      e.preventDefault();
-                      setTaskDragOverId('');
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setTaskDragOverId('');
-                      const files = Array.from(e.dataTransfer.files || []);
-                      if (files.length === 0) return;
-                      if (files.some((file) => !isTaskFileAllowed(file))) {
-                        showError('Nur PDF oder HTML Dateien sind erlaubt.');
-                        return;
-                      }
-                      setTaskUploadFiles((prev) => ({ ...prev, [t._id]: files }));
-                    }}
-                  >
-                    <input
-                      type="file"
-                      multiple
-                      accept=".pdf,.html,.htm,application/pdf,text/html"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        if (files.length === 0) return;
-                        if (files.some((file) => !isTaskFileAllowed(file))) {
-                          showError('Nur PDF oder HTML Dateien sind erlaubt.');
-                          return;
-                        }
-                        setTaskUploadFiles((prev) => ({ ...prev, [t._id]: files }));
-                      }}
-                    />
-                    <span>Aufgaben-Dateien (PDF/HTML) auswählen oder hierher ziehen</span>
-                    {taskUploadFiles[t._id]?.length > 0 && (
-                      <small>Ausgewählt: {taskUploadFiles[t._id].map((f) => f.name).join(', ')}</small>
                     )}
-                  </label>
-                  <button
-                    type="button"
-                    className="primary-btn"
-                    disabled={!taskUploadFiles[t._id]?.length}
-                    onClick={async () => {
-                      try {
-                        if (!taskUploadFiles[t._id]?.length) return;
-                        await adminApi.uploadTaskAttachment(t._id, taskUploadFiles[t._id]);
-                        setTaskUploadFiles((prev) => {
-                          const next = { ...prev };
-                          delete next[t._id];
-                          return next;
-                        });
-                        await loadContent(selectedStudy);
-                        showSuccess('Aufgaben-Datei erfolgreich hochgeladen.');
-                      } catch (err) {
-                        showError(err.message || 'Aufgaben-Datei konnte nicht hochgeladen werden.');
-                      }
-                    }}
-                  >
-                    Datei hochladen
-                  </button>
+                  </div>
                 </div>
-
-                {htmlFiles.length > 1 && (
-                  <label className="form-field">
-                    <span>Interaktive HTML-Datei</span>
-                    <select
-                      value={selectedHtmlPath}
-                      onChange={async (e) => {
-                        try {
-                          await adminApi.updateTask(t._id, {
-                            config: {
-                              ...(t.config || {}),
-                              interactive: {
-                                ...(t.config?.interactive || {}),
-                                file_path: e.target.value,
-                              },
-                            },
-                          });
-                          await loadContent(selectedStudy);
-                          showSuccess('Interaktive HTML-Datei gespeichert.');
-                        } catch (err) {
-                          showError(err.message || 'HTML-Datei konnte nicht gespeichert werden.');
-                        }
-                      }}
-                    >
-                      <option value="">Bitte auswählen</option>
-                      {htmlFiles.map((file, idx) => (
-                        <option key={`${t._id}-html-${idx}`} value={file.path}>
-                          {file.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                {htmlFiles.length === 1 && (
-                  <small className="task-file-meta">Interaktive HTML-Datei: {htmlFiles[0].name}</small>
-                )}
-                {selectedHtmlPath && (
-                  <small className="task-file-meta">Gewählte Datei: {selectedHtmlPath.split('/').pop()}</small>
+                {t.description && (
+                  <div className="task-description-block">
+                    <small className="task-head-label">Aufgabenbeschreibung</small>
+                    <p className="task-description-text">{t.description}</p>
+                  </div>
                 )}
                 <div className="task-steps">
                   <strong>Aufgabenstellungen ({taskSteps.length})</strong>
                   {taskSteps.length === 0 && (
                     <small className="task-file-meta">Noch keine Aufgabenstellung vorhanden.</small>
                   )}
-                  {taskSteps.map((step, idx) => (
-                    <div key={`${t._id}-step-${idx}`} className="row-item">
-                      <div>
-                        <strong>Schritt {idx + 1}</strong>
-                        <small>{step.prompt}</small>
-                        {Array.isArray(step.correct_ids) && step.correct_ids.length > 0 && (
-                          <small>Richtige IDs: {step.correct_ids.join(', ')}</small>
-                        )}
-                        {Number(step.time_limit_sec || 0) > 0 && (
-                          <small>Zeitlimit: {Number(step.time_limit_sec)} Sek.</small>
-                        )}
-                      </div>
-                      <div className="row-actions">
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          disabled={idx === 0}
-                          onClick={async () => {
-                            if (idx === 0) return;
-                            const nextSteps = [...taskSteps];
-                            [nextSteps[idx - 1], nextSteps[idx]] = [nextSteps[idx], nextSteps[idx - 1]];
-                            await adminApi.updateTask(t._id, {
-                              steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
-                            });
-                            await loadContent(selectedStudy);
-                          }}
-                        >
-                          Hoch
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          disabled={idx === taskSteps.length - 1}
-                          onClick={async () => {
-                            if (idx >= taskSteps.length - 1) return;
-                            const nextSteps = [...taskSteps];
-                            [nextSteps[idx + 1], nextSteps[idx]] = [nextSteps[idx], nextSteps[idx + 1]];
-                            await adminApi.updateTask(t._id, {
-                              steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
-                            });
-                            await loadContent(selectedStudy);
-                          }}
-                        >
-                          Runter
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          onClick={async () => {
-                            const prompt = window.prompt('Aufgabenstellung bearbeiten', step.prompt || '');
-                            if (prompt === null) return;
-                            const correct = window.prompt(
-                              'Richtige Antwort-IDs (Komma-getrennt)',
-                              Array.isArray(step.correct_ids) ? step.correct_ids.join(', ') : ''
+                  {taskSteps.length > 0 && (
+                    <div className="task-steps-grid">
+                      {taskSteps.map((step, idx) => (
+                        <article
+                          key={`${t._id}-step-${idx}`}
+                          className={`task-step-card ${
+                            taskStepDrag.taskId === t._id && taskStepDrag.index === idx ? 'is-dragging' : ''
+                          }`}
+                          draggable
+                          onDragStart={(event) => {
+                            event.dataTransfer.setData(
+                              'application/x-task-step',
+                              JSON.stringify({ taskId: t._id, index: idx })
                             );
-                            if (correct === null) return;
-                            const limitRaw = window.prompt(
-                              'Zeitlimit in Sekunden (0 = kein Limit)',
-                              String(Number(step.time_limit_sec || 0))
-                            );
-                            if (limitRaw === null) return;
-                            const nextLimit =
-                              Number.isFinite(Number(limitRaw)) && Number(limitRaw) > 0
-                                ? Math.floor(Number(limitRaw))
-                                : 0;
-                            const nextSteps = taskSteps.map((s, i) =>
-                              i === idx
-                                ? {
-                                    ...s,
-                                    prompt: prompt.trim(),
-                                    correct_ids: correct.split(',').map((x) => x.trim()).filter(Boolean),
-                                    time_limit_sec: nextLimit,
-                                  }
-                                : s
-                            );
-                            await adminApi.updateTask(t._id, {
-                              steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
-                            });
-                            await loadContent(selectedStudy);
-                            showSuccess('Aufgabenstellung gespeichert.');
+                            event.dataTransfer.effectAllowed = 'move';
+                            setTaskStepDrag({ taskId: t._id, index: idx });
                           }}
-                        >
-                          Bearbeiten
-                        </button>
-                        <button
-                          type="button"
-                          className="danger-btn"
-                          onClick={async () => {
-                            const ok = window.confirm('Aufgabenstellung wirklich löschen?');
-                            if (!ok) return;
-                            const nextSteps = taskSteps.filter((_, i) => i !== idx);
-                            await adminApi.updateTask(t._id, {
-                              steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
-                            });
-                            await loadContent(selectedStudy);
+                          onDragOver={(event) => {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = 'move';
                           }}
+                          onDrop={async (event) => {
+                            event.preventDefault();
+                            try {
+                              const payload = JSON.parse(event.dataTransfer.getData('application/x-task-step') || '{}');
+                              if (!payload || payload.taskId !== t._id) return;
+                              const fromIdx = Number(payload.index);
+                              const toIdx = Number(idx);
+                              if (!Number.isFinite(fromIdx) || !Number.isFinite(toIdx) || fromIdx === toIdx) return;
+
+                              const nextSteps = [...taskSteps];
+                              const [moved] = nextSteps.splice(fromIdx, 1);
+                              nextSteps.splice(toIdx, 0, moved);
+                              await adminApi.updateTask(t._id, {
+                                steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
+                              });
+                              await loadContent(selectedStudy);
+                              showSuccess('Reihenfolge der Aufgabenstellungen gespeichert.');
+                            } catch (err) {
+                              showError(err.message || 'Reihenfolge konnte nicht gespeichert werden.');
+                            } finally {
+                              setTaskStepDrag({ taskId: '', index: -1 });
+                            }
+                          }}
+                          onDragEnd={() => setTaskStepDrag({ taskId: '', index: -1 })}
                         >
-                          Löschen
-                        </button>
-                      </div>
+                          <div className="task-step-head">
+                            <strong>Schritt {idx + 1}</strong>
+                            <small>Drag & Drop zum Umsortieren</small>
+                          </div>
+                          <small>{step.prompt}</small>
+                          {Array.isArray(step.correct_ids) && step.correct_ids.length > 0 && (
+                            <small>Richtige IDs: {step.correct_ids.join(', ')}</small>
+                          )}
+                          {Number(step.time_limit_sec || 0) > 0 && (
+                            <small>Zeitlimit: {Number(step.time_limit_sec)} Sek.</small>
+                          )}
+                          <div className="row-actions">
+                            <button
+                              type="button"
+                              className="ghost-btn"
+                              onClick={async () => {
+                                const prompt = window.prompt('Aufgabenstellung bearbeiten', step.prompt || '');
+                                if (prompt === null) return;
+                                const correct = window.prompt(
+                                  'Richtige Antwort-IDs (Komma-getrennt)',
+                                  Array.isArray(step.correct_ids) ? step.correct_ids.join(', ') : ''
+                                );
+                                if (correct === null) return;
+                                const limitRaw = window.prompt(
+                                  'Zeitlimit in Sekunden (0 = kein Limit)',
+                                  String(Number(step.time_limit_sec || 0))
+                                );
+                                if (limitRaw === null) return;
+                                const nextLimit =
+                                  Number.isFinite(Number(limitRaw)) && Number(limitRaw) > 0
+                                    ? Math.floor(Number(limitRaw))
+                                    : 0;
+                                const nextSteps = taskSteps.map((s, i) =>
+                                  i === idx
+                                    ? {
+                                        ...s,
+                                        prompt: prompt.trim(),
+                                        correct_ids: correct.split(',').map((x) => x.trim()).filter(Boolean),
+                                        time_limit_sec: nextLimit,
+                                      }
+                                    : s
+                                );
+                                await adminApi.updateTask(t._id, {
+                                  steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
+                                });
+                                await loadContent(selectedStudy);
+                                showSuccess('Aufgabenstellung gespeichert.');
+                              }}
+                            >
+                              Bearbeiten
+                            </button>
+                            <button
+                              type="button"
+                              className="danger-btn"
+                              onClick={async () => {
+                                const ok = window.confirm('Aufgabenstellung wirklich löschen?');
+                                if (!ok) return;
+                                const nextSteps = taskSteps.filter((_, i) => i !== idx);
+                                await adminApi.updateTask(t._id, {
+                                  steps: nextSteps.map((s, i) => ({ ...s, order_index: i })),
+                                });
+                                await loadContent(selectedStudy);
+                              }}
+                            >
+                              Löschen
+                            </button>
+                          </div>
+                        </article>
+                      ))}
                     </div>
-                  ))}
+                  )}
                   <button
                     type="button"
                     className="ghost-btn"
@@ -1300,9 +1365,26 @@ export function AdminPage() {
                 </div>
                 {Array.isArray(t.config?.interactive?.selectable_ids) &&
                   t.config.interactive.selectable_ids.length > 0 && (
-                    <small className="task-file-meta">
-                      Klickbare IDs: {t.config.interactive.selectable_ids.join(', ')}
-                    </small>
+                    <div className="task-meta-toggle-wrap">
+                      <button
+                        type="button"
+                        className="ghost-btn task-meta-toggle"
+                        onClick={() =>
+                          setShowClickableIdsByTask((prev) => ({
+                            ...prev,
+                            [t._id]: !prev[t._id],
+                          }))
+                        }
+                      >
+                        <span className="task-meta-icon">{showClickableIdsByTask[t._id] ? '−' : '+'}</span>
+                        Klickbare IDs
+                      </button>
+                      {showClickableIdsByTask[t._id] && (
+                        <small className="task-file-meta">
+                          {t.config.interactive.selectable_ids.join(', ')}
+                        </small>
+                      )}
+                    </div>
                   )}
                 {Array.isArray(t.config?.interactive?.correct_ids) &&
                   t.config.interactive.correct_ids.length > 0 && (
@@ -1310,11 +1392,6 @@ export function AdminPage() {
                       Richtige IDs: {t.config.interactive.correct_ids.join(', ')}
                     </small>
                   )}
-                {taskFiles.map((file, idx) => (
-                  <small key={`${t._id}-file-${idx}`} className="task-file-meta">
-                    Datei: {file.name} ({file.format || 'none'})
-                  </small>
-                ))}
               </div>
             );
           })}

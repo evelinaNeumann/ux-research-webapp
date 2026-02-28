@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CardPanel } from '../components/CardPanel';
 import { studyApi } from '../api/studies';
 import { analyticsApi } from '../api/analytics';
@@ -24,6 +24,20 @@ export function AdminAnalyticsPage() {
   const [modulesOpen, setModulesOpen] = useState(true);
   const [activeModuleTab, setActiveModuleTab] = useState('questionnaire');
   const [error, setError] = useState('');
+  const [reportText, setReportText] = useState('');
+  const [reportFontFamily, setReportFontFamily] = useState('Arial');
+  const [reportFontSize, setReportFontSize] = useState(14);
+  const [reportTextColor, setReportTextColor] = useState('#111827');
+  const [reportBold, setReportBold] = useState(false);
+  const [reportItalic, setReportItalic] = useState(false);
+  const [reportIncludePortraits, setReportIncludePortraits] = useState(true);
+  const [reportIncludeCharts, setReportIncludeCharts] = useState({
+    interview: true,
+    card_sort: true,
+    image_rating: true,
+    task_work: true,
+  });
+  const reportPreviewRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -241,7 +255,7 @@ export function AdminAnalyticsPage() {
           {segments.map((s) => (
             <div key={s.label} className="pie-legend-row">
               <span className="pie-dot" style={{ background: s.color }} />
-              <span className="pie-label">{s.label}</span>
+              <span className="pie-label">{`${s.label} `}</span>
               <strong className="pie-value">{s.value} ({s.percent}%)</strong>
             </div>
           ))}
@@ -257,6 +271,105 @@ export function AdminAnalyticsPage() {
     if (portraitFilters.keyword) params.set('keyword', portraitFilters.keyword);
     return params.toString();
   }, [portraitFilters]);
+
+  const buildDraftReportText = (sourceOverview, studyName) => {
+    if (!sourceOverview) return '';
+    const lines = [];
+    lines.push('Projektbericht Kurs: DLBMIUID02 - User Interface Design');
+    lines.push(`Studie: ${studyName || '-'}`);
+    lines.push(`Teilnahmen: ${sourceOverview.sessions_total ?? 0}`);
+    lines.push(`Abgeschlossen: ${sourceOverview.sessions_done ?? 0}`);
+    lines.push(`Abschlussrate: ${sourceOverview.completion_rate ?? 0}%`);
+    lines.push('');
+    lines.push('1. Interview');
+    if (!sourceOverview.questionnaire?.length) {
+      lines.push('Keine Interview-Daten vorhanden.');
+    } else {
+      sourceOverview.questionnaire.forEach((q, idx) => {
+        lines.push(`${idx + 1}. ${q.question_text || q._id} (n=${q.n ?? 0})`);
+      });
+    }
+    lines.push('');
+    lines.push('2. Card Sorting');
+    lines.push(`Submissions gesamt: ${sourceOverview.card_sort_submissions ?? 0}`);
+    lines.push('');
+    lines.push('3. Bildauswertung');
+    if (!sourceOverview.image_rating?.length) {
+      lines.push('Keine Bildauswertungs-Daten vorhanden.');
+    } else {
+      sourceOverview.image_rating.forEach((row) => {
+        lines.push(`Bild ${String(row._id)}: Ø ${Number(row.avg || 0).toFixed(2)} (n=${row.n})`);
+      });
+    }
+    lines.push('');
+    lines.push('4. Aufgabenbearbeitung');
+    if (!(sourceOverview.task_work?.tasks || []).length) {
+      lines.push('Keine Aufgaben-Daten vorhanden.');
+    } else {
+      (sourceOverview.task_work?.tasks || []).forEach((task, idx) => {
+        lines.push(
+          `${idx + 1}. ${task.title}: gesamt ${task.total ?? 0}, korrekt ${task.correct ?? 0}, falsch geklickt ${task.incorrect_click ?? 0}, Zeit abgelaufen ${task.timed_out ?? 0}`
+        );
+      });
+    }
+    return lines.join('\n');
+  };
+
+  useEffect(() => {
+    if (!overview) return;
+    setReportText(buildDraftReportText(overview, selectedStudyName));
+  }, [overview, selectedStudyName]);
+
+  const openReportPrintPreview = () => {
+    if (!reportPreviewRef.current) return;
+    const previewHtml = reportPreviewRef.current.innerHTML;
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Report Vorschau</title>
+          <style>
+            body { font-family: ${reportFontFamily}, sans-serif; font-size: ${reportFontSize}px; color: ${reportTextColor}; margin: 24px; background: #f5f7fb; font-weight: ${reportBold ? '700' : '400'}; font-style: ${reportItalic ? 'italic' : 'normal'}; }
+            .print-toolbar { position: sticky; top: 0; z-index: 10; background: #fff; padding: 10px 0 12px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+            .print-btn { border: 1px solid #1d4ed8; background: #1d4ed8; color: #fff; border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
+            .report-preview-page { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; box-shadow: 0 8px 20px rgba(15,23,42,0.12); padding: 12mm; box-sizing: border-box; }
+            .report-preview-content { display: grid; gap: 10px; }
+            .report-line { margin: 0; white-space: pre-wrap; }
+            .report-diagram-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .report-diagram-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; }
+            .report-diagram-card-wide { grid-column: 1 / -1; }
+            .pie-chart { width: 160px; height: 160px; border-radius: 50%; border: 1px solid #e5e7eb; margin: 0 auto; }
+            .report-preview-content .pie-block { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
+            .report-preview-content .pie-legend { order: 1; }
+            .report-preview-content .pie-chart { order: 2; width: 92px; height: 92px; margin: 0; }
+            .report-portrait-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(280px, 350px)); justify-content: start; }
+            .profile-agg-grid { display: grid; gap: 10px; grid-template-columns: 1fr; }
+            .dist-wrap { display: grid; gap: 6px; }
+            .dist-row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr auto; align-items: center; gap: 8px; }
+            .dist-label { color: #334155; font-size: 12px; }
+            .dist-value { font-size: 12px; color: #0f172a; }
+            .bar-track { height: 10px; border-radius: 999px; background: #e5e7eb; overflow: hidden; }
+            .bar-fill { height: 100%; background: #1d4ed8; }
+            .portrait-card { border: 1px solid #e6ebf3; border-radius: 12px; padding: 8px; display: grid; gap: 4px; }
+            .tag-wrap { display: flex; gap: 6px; flex-wrap: wrap; }
+            .tag-chip { border: 1px solid #dbe7ff; border-radius: 999px; background: #eff6ff; color: #1e40af; padding: 2px 8px; font-size: 12px; }
+            @media (max-width: 900px) { .report-preview-page { width: 100%; min-height: auto; padding: 16px; } .report-diagram-grid, .report-portrait-grid, .profile-agg-grid { grid-template-columns: 1fr; } }
+            @media print { body { background: #fff; margin: 0; } .print-toolbar { display: none; } .report-preview-page { width: auto; min-height: auto; margin: 0; box-shadow: none; padding: 10mm; } }
+          </style>
+        </head>
+        <body>
+          <div class="print-toolbar">
+            <button class="print-btn" onclick="window.print()">Report drucken</button>
+          </div>
+          <div class="report-preview-page">${previewHtml}</div>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+  };
 
   return (
     <div className="analytics-shell">
@@ -276,6 +389,12 @@ export function AdminAnalyticsPage() {
               onClick={() => window.open(`http://localhost:4000/analytics/export?format=csv&studyId=${selectedStudy}`, '_blank')}
             >
               CSV Export
+            </button>
+            <button
+              className="ghost-btn"
+              onClick={() => window.open(`http://localhost:4000/analytics/export?format=pdf&studyId=${selectedStudy}`, '_blank')}
+            >
+              PDF Export
             </button>
             <button
               className="ghost-btn"
@@ -373,6 +492,283 @@ export function AdminAnalyticsPage() {
                 ))}
               </select>
             </label>
+          </div>
+        </CardPanel>
+      )}
+
+      {portraits && (
+        <CardPanel title="User Portraits und Profil-Daten Auswertung">
+          <div className="analytics-collapse-header">
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => setProfileInsightsOpen((v) => !v)}
+            >
+              {profileInsightsOpen ? 'Zuklappen' : 'Aufklappen'}
+            </button>
+          </div>
+          {profileInsightsOpen && (
+            <>
+              <div className="analytics-toolbar">
+                <p className="hint">Profile in dieser Studie: <strong>{portraits.total_profiles || 0}</strong></p>
+                <div className="analytics-actions">
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={() =>
+                      window.open(
+                        `http://localhost:4000/analytics/study/${selectedStudy}/user-portraits/export?format=pdf${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
+                        '_blank'
+                      )
+                    }
+                  >
+                    Portrait PDF Export
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={() =>
+                      window.open(
+                        `http://localhost:4000/analytics/study/${selectedStudy}/user-portraits/export?format=json${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
+                        '_blank'
+                      )
+                    }
+                  >
+                    Portrait JSON Export
+                  </button>
+                </div>
+              </div>
+              {filteredPortraitItems.length === 0 && <p>Keine Profildaten für den gewählten Filter.</p>}
+              <div className="portrait-grid">
+                {filteredPortraitItems.map((u) => (
+                  <article key={`${u.user_id || u.username}`} className="portrait-card">
+                    <h4>{u.username}</h4>
+                    <small>Alter: {u.age_range || '-'}</small>
+                    <small>Rolle: {roleLabel(u.role_category, u.role_custom)}</small>
+                    <div className="tag-wrap">
+                      {(u.key_points || []).map((point) => (
+                        <span key={point} className="tag-chip">{point}</span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="profile-agg-grid">
+                <div>
+                  <h4>Alter (Verteilung)</h4>
+                  {renderDistributionBars(filteredAggregates.age_ranges || [], (key) => key)}
+                </div>
+                <div>
+                  <h4>Rollen (Verteilung)</h4>
+                  {renderDistributionBars(filteredAggregates.roles || [], (key) => roleLabel(key, ''))}
+                </div>
+                <div>
+                  <h4>Wichtige Wörter (Top)</h4>
+                  {renderDistributionBars(filteredAggregates.key_points || [], (key) => key)}
+                </div>
+              </div>
+            </>
+          )}
+        </CardPanel>
+      )}
+
+      {overview && (
+        <CardPanel title="PDF Report Vorschau und Editor">
+          <div className="report-editor-grid">
+            <label className="form-field">
+              <span>Schriftart</span>
+              <select value={reportFontFamily} onChange={(e) => setReportFontFamily(e.target.value)}>
+                <option value="Arial">Arial</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Courier New">Courier New</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Schriftgröße</span>
+              <input
+                type="number"
+                min="10"
+                max="24"
+                value={reportFontSize}
+                onChange={(e) => setReportFontSize(Math.max(10, Math.min(24, Number(e.target.value) || 14)))}
+              />
+            </label>
+            <label className="form-field">
+              <span>Textfarbe</span>
+              <input type="color" value={reportTextColor} onChange={(e) => setReportTextColor(e.target.value)} />
+            </label>
+            <label className="form-field report-inline-check">
+              <span>Fett</span>
+              <input type="checkbox" checked={reportBold} onChange={(e) => setReportBold(e.target.checked)} />
+            </label>
+            <label className="form-field report-inline-check">
+              <span>Kursiv</span>
+              <input type="checkbox" checked={reportItalic} onChange={(e) => setReportItalic(e.target.checked)} />
+            </label>
+            <div className="analytics-actions">
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => setReportText(buildDraftReportText(overview, selectedStudyName))}
+              >
+                Text neu laden
+              </button>
+              <button type="button" className="primary-btn" onClick={openReportPrintPreview}>
+                Vorschau/Drucken (PDF)
+              </button>
+            </div>
+          </div>
+
+          <div className="report-include-row">
+            <label><input type="checkbox" checked={reportIncludePortraits} onChange={(e) => setReportIncludePortraits(e.target.checked)} /> User Portraits</label>
+            <label><input type="checkbox" checked={reportIncludeCharts.interview} onChange={(e) => setReportIncludeCharts((p) => ({ ...p, interview: e.target.checked }))} /> Interview-Diagramme</label>
+            <label><input type="checkbox" checked={reportIncludeCharts.card_sort} onChange={(e) => setReportIncludeCharts((p) => ({ ...p, card_sort: e.target.checked }))} /> Card-Sorting-Diagramme</label>
+            <label><input type="checkbox" checked={reportIncludeCharts.image_rating} onChange={(e) => setReportIncludeCharts((p) => ({ ...p, image_rating: e.target.checked }))} /> Bild-Diagramme</label>
+            <label><input type="checkbox" checked={reportIncludeCharts.task_work} onChange={(e) => setReportIncludeCharts((p) => ({ ...p, task_work: e.target.checked }))} /> Aufgaben-Diagramme</label>
+          </div>
+
+          <label className="form-field">
+            <span>Report-Text (frei editierbar, Zeilen können gelöscht werden)</span>
+            <textarea
+              rows={14}
+              value={reportText}
+              onChange={(e) => setReportText(e.target.value)}
+              className="report-textarea"
+            />
+          </label>
+
+          <div className="report-preview-page">
+            <div
+              ref={reportPreviewRef}
+              className="report-preview-content"
+              style={{
+                fontFamily: reportFontFamily,
+                fontSize: `${reportFontSize}px`,
+                color: reportTextColor,
+                fontWeight: reportBold ? 700 : 400,
+                fontStyle: reportItalic ? 'italic' : 'normal',
+              }}
+            >
+              {reportText.split('\n').map((line, idx) => (
+                <p key={`report-line-${idx}`} className="report-line">{line || ' '}</p>
+              ))}
+
+              {reportIncludePortraits && (
+                <div className="report-diagram-card">
+                  <p className="qa-question">User Portraits und Profil-Daten</p>
+                  <p className="hint">Profile (gefiltert): {filteredProfileCount}</p>
+                  {filteredPortraitItems.length > 0 ? (
+                    <>
+                      <div className="portrait-grid report-portrait-grid">
+                        {filteredPortraitItems.map((u) => (
+                          <article key={`report-portrait-${u.user_id || u.username}`} className="portrait-card">
+                            <h4>{u.username}</h4>
+                            <small>Alter: {u.age_range || '-'}</small>
+                            <small>Rolle: {roleLabel(u.role_category, u.role_custom)}</small>
+                            <div className="tag-wrap">
+                              {(u.key_points || []).map((point) => (
+                                <span key={`${u.username}-${point}`} className="tag-chip">{point}</span>
+                              ))}
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                      <div className="profile-agg-grid report-profile-agg-stack">
+                        <div>
+                          <h4>Alter (Verteilung)</h4>
+                          {renderDistributionBars(filteredAggregates.age_ranges || [], (key) => key)}
+                        </div>
+                        <div>
+                          <h4>Rollen (Verteilung)</h4>
+                          {renderDistributionBars(filteredAggregates.roles || [], (key) => roleLabel(key, ''))}
+                        </div>
+                        <div>
+                          <h4>Wichtige Wörter (Top)</h4>
+                          {renderDistributionBars(filteredAggregates.key_points || [], (key) => key)}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p>Keine Profildaten für den gewählten Filter.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="report-diagram-grid">
+              {reportIncludeCharts.interview && (
+                <article className="report-diagram-card">
+                  <p className="qa-question">Interview Antworten je Frage</p>
+                  {renderCountBars(
+                    (overview.questionnaire || []).map((q) => ({ label: q.question_text || String(q._id), count: q.n || 0 })),
+                    (row) => row.label,
+                    'Keine Interview-Daten vorhanden.'
+                  )}
+                </article>
+              )}
+              {reportIncludeCharts.card_sort && (
+                <article className="report-diagram-card">
+                  <p className="qa-question">Card Sorting: Zuordnungen je Spalte</p>
+                  {renderPieChart(
+                    overview.card_sort?.column_distribution || [],
+                    (row) => row.column,
+                    'Keine Card-Sorting-Daten vorhanden.'
+                  )}
+                </article>
+              )}
+              {reportIncludeCharts.image_rating && (
+                <article className="report-diagram-card">
+                  <p className="qa-question">Bildauswertung</p>
+                  {renderCountBars(
+                    (overview.image_rating || []).map((img) => ({ label: `Bild ${String(img._id)}`, count: Number((Number(img.avg || 0)).toFixed(2)) })),
+                    (row) => row.label,
+                    'Keine Bilddaten vorhanden.'
+                  )}
+                </article>
+              )}
+              {reportIncludeCharts.task_work && (
+                <article className="report-diagram-card report-diagram-card-wide">
+                  <p className="qa-question">Aufgaben: Task gesamt</p>
+                  {(overview.task_work?.tasks || []).length ? (
+                    (overview.task_work?.tasks || []).map((task) => (
+                      <div key={`report-task-pie-${task.task_id}`} className="report-task-block">
+                        <small>{task.title}</small>
+                        {renderPieChart(
+                          [
+                            { label: 'Korrekt', count: Number(task.correct || 0) },
+                            { label: 'Falsch geklickt', count: Number(task.incorrect_click || 0) },
+                            { label: 'Zeit abgelaufen', count: Number(task.timed_out || 0) },
+                          ],
+                          (row) => row.label
+                        )}
+                        {(task.steps || []).length > 0 && (
+                          <div className="report-step-grid">
+                            {(task.steps || []).map((step) => (
+                              <div key={`report-task-step-${task.task_id}-${step.step_index}`} className="report-step-card">
+                                <small>
+                                  Schritt {Number(step.step_index || 0) + 1}: {step.prompt || '-'}
+                                </small>
+                                {renderPieChart(
+                                  [
+                                    { label: 'Korrekt', count: Number(step.correct || 0) },
+                                    { label: 'Falsch geklickt', count: Number(step.incorrect_click || 0) },
+                                    { label: 'Zeit abgelaufen', count: Number(step.timed_out || 0) },
+                                  ],
+                                  (row) => row.label
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <p>Keine Aufgaben-Daten vorhanden.</p>
+                  )}
+                </article>
+              )}
+              </div>
+            </div>
           </div>
         </CardPanel>
       )}
@@ -683,81 +1079,6 @@ export function AdminAnalyticsPage() {
         </CardPanel>
       )}
 
-      {portraits && (
-        <CardPanel title="User Portraits und Profil-Daten Auswertung">
-          <div className="analytics-collapse-header">
-            <button
-              type="button"
-              className="ghost-btn"
-              onClick={() => setProfileInsightsOpen((v) => !v)}
-            >
-              {profileInsightsOpen ? 'Zuklappen' : 'Aufklappen'}
-            </button>
-          </div>
-          {profileInsightsOpen && (
-            <>
-              <div className="analytics-toolbar">
-                <p className="hint">Profile in dieser Studie: <strong>{portraits.total_profiles || 0}</strong></p>
-                <div className="analytics-actions">
-                  <button
-                    type="button"
-                    className="primary-btn"
-                    onClick={() =>
-                      window.open(
-                        `http://localhost:4000/analytics/study/${selectedStudy}/user-portraits/export?format=pdf${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
-                        '_blank'
-                      )
-                    }
-                  >
-                    Portrait PDF Export
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    onClick={() =>
-                      window.open(
-                        `http://localhost:4000/analytics/study/${selectedStudy}/user-portraits/export?format=json${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
-                        '_blank'
-                      )
-                    }
-                  >
-                    Portrait JSON Export
-                  </button>
-                </div>
-              </div>
-              {filteredPortraitItems.length === 0 && <p>Keine Profildaten für den gewählten Filter.</p>}
-              <div className="portrait-grid">
-                {filteredPortraitItems.map((u) => (
-                  <article key={`${u.user_id || u.username}`} className="portrait-card">
-                    <h4>{u.username}</h4>
-                    <small>Alter: {u.age_range || '-'}</small>
-                    <small>Rolle: {roleLabel(u.role_category, u.role_custom)}</small>
-                    <div className="tag-wrap">
-                      {(u.key_points || []).map((point) => (
-                        <span key={point} className="tag-chip">{point}</span>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-              <div className="profile-agg-grid">
-                <div>
-                  <h4>Alter (Verteilung)</h4>
-                  {renderDistributionBars(filteredAggregates.age_ranges || [], (key) => key)}
-                </div>
-                <div>
-                  <h4>Rollen (Verteilung)</h4>
-                  {renderDistributionBars(filteredAggregates.roles || [], (key) => roleLabel(key, ''))}
-                </div>
-                <div>
-                  <h4>Wichtige Wörter (Top)</h4>
-                  {renderDistributionBars(filteredAggregates.key_points || [], (key) => key)}
-                </div>
-              </div>
-            </>
-          )}
-        </CardPanel>
-      )}
     </div>
   );
 }

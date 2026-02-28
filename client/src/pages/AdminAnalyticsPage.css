@@ -299,6 +299,164 @@
   color: #0f172a;
 }
 
+.report-editor-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.report-include-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 0.7rem;
+}
+
+.report-include-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #334155;
+  font-size: 0.88rem;
+}
+
+.report-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.report-textarea {
+  width: 100%;
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  font: inherit;
+  resize: vertical;
+}
+
+.report-preview-content {
+  margin-top: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.report-preview-page {
+  width: 210mm;
+  min-height: 297mm;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12mm;
+  box-sizing: border-box;
+}
+
+.report-line {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.report-diagram-grid {
+  margin-top: 0.6rem;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-diagram-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.6rem;
+  background: #fafbfe;
+}
+
+.report-diagram-card-wide {
+  grid-column: 1 / -1;
+}
+
+.report-task-block {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.report-portrait-grid {
+  grid-template-columns: repeat(2, minmax(280px, 350px));
+  justify-content: start;
+  margin-bottom: 0.9rem;
+}
+
+.report-profile-agg-stack {
+  grid-template-columns: 1fr;
+}
+
+.report-step-grid {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: 1fr;
+}
+
+.report-step-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.5rem;
+  background: #fff;
+  display: grid;
+  gap: 0.4rem;
+  overflow: hidden;
+}
+
+.report-step-card .pie-chart,
+.report-diagram-card .pie-chart {
+  width: min(160px, 100%);
+  height: min(160px, 100%);
+}
+
+.report-preview-content .pie-block {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.report-preview-content .pie-legend {
+  order: 1;
+}
+
+.report-preview-content .pie-chart {
+  order: 2;
+  width: 92px;
+  height: 92px;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .report-diagram-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-step-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-portrait-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-preview-page {
+    width: 100%;
+    min-height: auto;
+    padding: 16px;
+  }
+}
+
 @media (max-width: 900px) {
   .pie-cards-grid {
     grid-template-columns: 1fr;

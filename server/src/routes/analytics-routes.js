@@ -377,10 +377,35 @@ function toModulePdfEntries(report) {
         `Gesamt: ${task.total ?? 0} | korrekt: ${task.correct ?? 0} | falsch geklickt: ${task.incorrect_click ?? 0} | Zeit abgelaufen: ${task.timed_out ?? 0}`,
         { size: 10, indent: 16 }
       );
+      push('Kreisdiagramm: Task gesamt', { size: 10, indent: 16 });
+      pushPie(
+        [
+          { key: 'Korrekt', count: Number(task.correct || 0) },
+          { key: 'Falsch geklickt', count: Number(task.incorrect_click || 0) },
+          { key: 'Zeit abgelaufen', count: Number(task.timed_out || 0) },
+        ],
+        (row) => row.key,
+        null,
+        8
+      );
       (task.steps || []).forEach((step) => {
         push(
           `- Schritt ${Number(step.step_index || 0) + 1}: ${step.prompt || '-'} | n: ${step.total ?? 0} | korrekt: ${step.correct ?? 0} | falsch geklickt: ${step.incorrect_click ?? 0} | Zeit abgelaufen: ${step.timed_out ?? 0} | Quote: ${step.correct_rate ?? 0}%`,
           { size: 10, indent: 20, wrap: true }
+        );
+        push(
+          `  Kreisdiagramm: Schritt ${Number(step.step_index || 0) + 1}`,
+          { size: 10, indent: 24 }
+        );
+        pushPie(
+          [
+            { key: 'Korrekt', count: Number(step.correct || 0) },
+            { key: 'Falsch geklickt', count: Number(step.incorrect_click || 0) },
+            { key: 'Zeit abgelaufen', count: Number(step.timed_out || 0) },
+          ],
+          (row) => row.key,
+          null,
+          8
         );
       });
       spacer(3);
@@ -450,6 +475,31 @@ function buildModulesCharts(overview = {}) {
       series: (overview.task_work?.tasks || []).flatMap((task) =>
         (task.steps || []).map((step) => Number(step.correct_rate || 0))
       ),
+    },
+    task_work_pies: {
+      chart_type: 'pie_collection',
+      tasks: (overview.task_work?.tasks || []).map((task) => ({
+        task_id: task.task_id,
+        title: task.title,
+        total: {
+          labels: ['Korrekt', 'Falsch geklickt', 'Zeit abgelaufen'],
+          series: [
+            Number(task.correct || 0),
+            Number(task.incorrect_click || 0),
+            Number(task.timed_out || 0),
+          ],
+        },
+        steps: (task.steps || []).map((step) => ({
+          step_index: Number(step.step_index || 0),
+          prompt: step.prompt || '-',
+          labels: ['Korrekt', 'Falsch geklickt', 'Zeit abgelaufen'],
+          series: [
+            Number(step.correct || 0),
+            Number(step.incorrect_click || 0),
+            Number(step.timed_out || 0),
+          ],
+        })),
+      })),
     },
   };
 }
@@ -916,6 +966,23 @@ router.get('/export', async (req, res, next) => {
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename="analytics.csv"');
       return res.status(200).send(csv);
+    }
+
+    if (format === 'pdf') {
+      const charts = buildModulesCharts(data);
+      const study = filters.studyId ? await Study.findById(filters.studyId, { name: 1 }) : null;
+      const pdf = createStructuredPdf(
+        toModulePdfEntries({
+          studyName: study?.name || 'Gesamtauswertung',
+          generatedAt: new Date().toLocaleString('de-DE'),
+          filters,
+          overview: data,
+          charts,
+        })
+      );
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="analytics-report.pdf"');
+      return res.status(200).send(pdf);
     }
 
     return res.json(rows);
