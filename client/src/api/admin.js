@@ -37,6 +37,17 @@ export const adminApi = {
   updateCard: (cardId, payload) =>
     http(`/admin/cards/${cardId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteCard: (cardId) => http(`/admin/cards/${cardId}`, { method: 'DELETE' }),
+  listImages: (studyId) => http(`/admin/studies/${studyId}/images`),
+  uploadImage: (studyId, file, meta = {}) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    if (meta.alt_text) formData.append('alt_text', meta.alt_text);
+    if (meta.category) formData.append('category', meta.category);
+    return http(`/admin/studies/${studyId}/images/upload`, { method: 'POST', body: formData });
+  },
+  updateImage: (imageId, payload) =>
+    http(`/admin/images/${imageId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteImage: (imageId) => http(`/admin/images/${imageId}`, { method: 'DELETE' }),
   listCardSortColumns: (studyId) => http(`/admin/studies/${studyId}/card-sort-columns`),
   createCardSortColumn: (studyId, payload) =>
     http(`/admin/studies/${studyId}/card-sort-columns`, { method: 'POST', body: JSON.stringify(payload) }),

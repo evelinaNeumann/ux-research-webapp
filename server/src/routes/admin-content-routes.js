@@ -489,11 +489,12 @@ router.get('/studies/:studyId/images', async (req, res) => {
   const items = await ImageAsset.find({ study_id: req.params.studyId });
   res.json(items);
 });
-router.post('/studies/:studyId/images/upload', uploadImage.single('image'), async (req, res) => {
+router.post('/studies/:studyId/images/upload', uploadImage.single('image'), async (req, res, next) => {
+  if (!req.file) return next(badRequest('image file required (jpg, png, pdf)'));
   const item = await ImageAsset.create({
     study_id: req.params.studyId,
     path: req.file.path,
-    alt_text: req.body.alt_text || '',
+    alt_text: req.body.alt_text || req.file.originalname || '',
     category: req.body.category || '',
   });
   res.status(201).json(item);

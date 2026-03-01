@@ -360,6 +360,31 @@ function toModulePdfEntries(report) {
     null,
     20
   );
+  spacer(6);
+  push('4.2 Bild-Aufgaben', { bold: true, size: 11 });
+  const imageTaskItems = report.overview.image_task_work?.tasks || [];
+  if (!imageTaskItems.length) {
+    push('Keine Bild-Aufgaben-Daten vorhanden.', { size: 10, indent: 16 });
+  } else {
+    imageTaskItems.forEach((task, idx) => {
+      push(`${idx + 1}. ${task.title || task.task_id} (${task.type})`, { bold: true, size: 10 });
+      push(`Antworten: ${task.total ?? 0} | Zeit abgelaufen: ${task.timed_out ?? 0}`, { size: 10, indent: 16 });
+      if (task.type === 'image_compare') {
+        pushPie(task.option_distribution || [], (row) => row.option, null, 8);
+      } else if (task.type === 'image_impression') {
+        pushPie((task.card_distribution || []).slice(0, 8), (row) => row.card, null, 8);
+      } else if (task.type === 'image_questions') {
+        (task.questions || []).forEach((q, qIdx) => {
+          push(`Frage ${qIdx + 1}: ${q.question || '-'}`, { size: 10, indent: 16, wrap: true });
+          pushBars(q.top_answers || [], (row) => row.answer, q.n || null, 8);
+        });
+      } else if (task.type === 'image_dislike_mark') {
+        push(`Ø Markierungen: ${task.avg_marks ?? 0}`, { size: 10, indent: 16 });
+        pushPie(task.marks_distribution || [], (row) => row.bucket, null, 8);
+      }
+      spacer(3);
+    });
+  }
   spacer(8);
 
   push('5. Aufgabenbearbeitung', { bold: true, size: 13 });
@@ -466,6 +491,54 @@ function buildModulesCharts(overview = {}) {
       chart_type: 'bar',
       labels: (overview.image_rating || []).map((row) => `Bild ${String(row._id)}`),
       series: (overview.image_rating || []).map((row) => Number((Number(row.avg || 0)).toFixed(2))),
+    },
+    image_task_work_pies: {
+      chart_type: 'pie_collection',
+      tasks: (overview.image_task_work?.tasks || []).map((task) => {
+        if (task.type === 'image_compare') {
+          return {
+            task_id: task.task_id,
+            title: task.title,
+            type: task.type,
+            total: {
+              labels: (task.option_distribution || []).map((x) => x.option),
+              series: (task.option_distribution || []).map((x) => Number(x.count || 0)),
+            },
+          };
+        }
+        if (task.type === 'image_impression') {
+          const top = (task.card_distribution || []).slice(0, 8);
+          return {
+            task_id: task.task_id,
+            title: task.title,
+            type: task.type,
+            total: {
+              labels: top.map((x) => x.card),
+              series: top.map((x) => Number(x.count || 0)),
+            },
+          };
+        }
+        if (task.type === 'image_dislike_mark') {
+          return {
+            task_id: task.task_id,
+            title: task.title,
+            type: task.type,
+            total: {
+              labels: (task.marks_distribution || []).map((x) => x.bucket),
+              series: (task.marks_distribution || []).map((x) => Number(x.count || 0)),
+            },
+          };
+        }
+        return {
+          task_id: task.task_id,
+          title: task.title,
+          type: task.type,
+          total: {
+            labels: ['Antworten'],
+            series: [Number(task.total || 0)],
+          },
+        };
+      }),
     },
     task_work_correct_rate: {
       chart_type: 'bar',

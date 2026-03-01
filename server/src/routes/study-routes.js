@@ -166,6 +166,9 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res, next) => {
     const {
       name,
       description,
+      image_rating_prompt,
+      image_rating_card_pool,
+      image_rating_tasks,
       type,
       module_order,
       profile_cards_source_study_id,
@@ -181,6 +184,9 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res, next) => {
     const study = await Study.create({
       name,
       description,
+      image_rating_prompt: image_rating_prompt || '',
+      image_rating_card_pool: Array.isArray(image_rating_card_pool) ? image_rating_card_pool : [],
+      image_rating_tasks: Array.isArray(image_rating_tasks) ? image_rating_tasks : [],
       type,
       module_order: module_order !== undefined ? module_order : moduleOrderForStudyType(type),
       profile_cards_source_study_id: inheritance.sourceId,
@@ -198,6 +204,9 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res, next) => 
     const {
       name,
       description,
+      image_rating_prompt,
+      image_rating_card_pool,
+      image_rating_tasks,
       type,
       is_active,
       module_order,
@@ -210,6 +219,13 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res, next) => 
 
     if (name !== undefined) study.name = name;
     if (description !== undefined) study.description = description;
+    if (image_rating_prompt !== undefined) study.image_rating_prompt = String(image_rating_prompt || '');
+    if (image_rating_card_pool !== undefined) {
+      study.image_rating_card_pool = Array.isArray(image_rating_card_pool) ? image_rating_card_pool : [];
+    }
+    if (image_rating_tasks !== undefined) {
+      study.image_rating_tasks = Array.isArray(image_rating_tasks) ? image_rating_tasks : [];
+    }
     if (type !== undefined) {
       study.type = type;
       if (module_order === undefined) {

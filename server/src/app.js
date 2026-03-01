@@ -27,6 +27,7 @@ app.use(
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
+app.use('/uploads', express.static(path.resolve(__dirname, '../server/uploads')));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });

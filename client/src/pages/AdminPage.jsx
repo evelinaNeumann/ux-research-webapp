@@ -40,8 +40,27 @@ export function AdminPage() {
   const [taskDescription, setTaskDescription] = useState('');
   const [taskCorrectIds, setTaskCorrectIds] = useState('');
   const [taskStepTimeLimitSec, setTaskStepTimeLimitSec] = useState('');
+  const [imageRatingPrompt, setImageRatingPrompt] = useState('');
+  const [imageUploadFiles, setImageUploadFiles] = useState([]);
+  const [imageDragOver, setImageDragOver] = useState(false);
+  const [imageCardPoolInput, setImageCardPoolInput] = useState('');
+  const [imageCardPoolEditMode, setImageCardPoolEditMode] = useState(false);
+  const [imageCardPoolSourceStudyId, setImageCardPoolSourceStudyId] = useState('');
+  const [imageTaskDraft, setImageTaskDraft] = useState({
+    type: 'image_questions',
+    title: '',
+    description: '',
+    duration_sec: '5',
+    max_select: '5',
+    max_marks: '3',
+    cards_text: '',
+    questions_text: '',
+    image_id_a: '',
+    image_id_b: '',
+  });
+  const [imageTaskDragIndex, setImageTaskDragIndex] = useState(-1);
   const [profileCardLabel, setProfileCardLabel] = useState('');
-  const [items, setItems] = useState({ questions: [], cards: [], tasks: [] });
+  const [items, setItems] = useState({ questions: [], cards: [], tasks: [], images: [] });
   const [profileCards, setProfileCards] = useState([]);
   const [cardSortColumns, setCardSortColumns] = useState([]);
   const [taskUploadFiles, setTaskUploadFiles] = useState({});
@@ -85,17 +104,18 @@ export function AdminPage() {
 
   const loadContent = async (studyId) => {
     if (!studyId) return;
-    const [questions, cards, tasks, assigned] = await Promise.all([
+    const [questions, cards, tasks, images, assigned] = await Promise.all([
       adminApi.listQuestions(studyId),
       adminApi.listCards(studyId),
       adminApi.listTasks(studyId),
+      adminApi.listImages(studyId),
       adminApi.listAssignments(studyId),
     ]);
     const [pCards, csColumns] = await Promise.all([
       adminApi.listProfileCards(studyId),
       adminApi.listCardSortColumns(studyId),
     ]);
-    setItems({ questions, cards, tasks });
+    setItems({ questions, cards, tasks, images });
     setAssignments(assigned || []);
     setProfileCards(pCards || []);
     setCardSortColumns(csColumns || []);
@@ -149,6 +169,24 @@ export function AdminPage() {
       inherit_profile_cards: !!selectedStudyData.inherit_profile_cards,
       inherit_user_profile_points: !!selectedStudyData.inherit_user_profile_points,
     });
+    setImageRatingPrompt(selectedStudyData.image_rating_prompt || '');
+    setImageUploadFiles([]);
+    setImageDragOver(false);
+    setImageCardPoolInput('');
+    setImageCardPoolEditMode(false);
+    setImageCardPoolSourceStudyId('');
+    setImageTaskDraft({
+      type: 'image_questions',
+      title: '',
+      description: '',
+      duration_sec: '5',
+      max_select: '5',
+      max_marks: '3',
+      cards_text: '',
+      questions_text: '',
+      image_id_a: '',
+      image_id_b: '',
+    });
     setBriefFile(null);
   }, [selectedStudyData]);
 
@@ -162,9 +200,21 @@ export function AdminPage() {
     () => selectedStudyData?.name || 'Keine Studie',
     [selectedStudyData]
   );
+  const imageTaskItems = useMemo(
+    () =>
+      [...(selectedStudyData?.image_rating_tasks || [])].sort(
+        (a, b) => Number(a.order_index || 0) - Number(b.order_index || 0)
+      ),
+    [selectedStudyData]
+  );
+  const imageCardPool = useMemo(
+    () => (Array.isArray(selectedStudyData?.image_rating_card_pool) ? selectedStudyData.image_rating_card_pool : []),
+    [selectedStudyData]
+  );
   const selectedStudyType = selectedStudyData?.type || 'mixed';
   const showInterviewConfig = selectedStudyType === 'mixed' || selectedStudyType === 'questionnaire';
   const showCardSortConfig = selectedStudyType === 'mixed' || selectedStudyType === 'card_sort';
+  const showImageConfig = selectedStudyType === 'mixed' || selectedStudyType === 'image_rating';
   const showTaskConfig = selectedStudyType === 'mixed' || selectedStudyType === 'task_work';
 
   const handleDroppedFile = (file) => {
@@ -306,10 +356,34 @@ export function AdminPage() {
 
             {selectedStudyData && (
               <div className="study-edit-card">
-            <h4>Ausgewählte Studie bearbeiten</h4>
+            <div className="study-edit-header">
+              <h4>Ausgewählte Studie bearbeiten</h4>
+              <button
+                type="button"
+                className="danger-btn"
+                onClick={async () => {
+                  const ok = window.confirm(`Studie "${selectedStudyData.name}" wirklich löschen?`);
+                  if (!ok) return;
+                  await studyApi.remove(selectedStudyData._id);
+                  const list = await refreshStudies();
+                  const nextId = list[0]?._id || '';
+                  setSelectedStudy(nextId);
+                }}
+              >
+                Studie löschen
+              </button>
+            </div>
             <div className="admin-grid">
+              <label className="form-field">
+                <span>Studie auswählen</span>
+                <select value={selectedStudy} onChange={(e) => setSelectedStudy(e.target.value)}>
+                  {studies.map((s) => (
+                    <option key={s._id} value={s._id}>{s.name}</option>
+                  ))}
+                </select>
+              </label>
               <FormField
-                label="Studienname"
+                label="Studienname ändern"
                 value={studyEditForm.name}
                 onChange={(e) => setStudyEditForm({ ...studyEditForm, name: e.target.value })}
               />
@@ -472,32 +546,6 @@ export function AdminPage() {
             </div>
               </div>
             )}
-
-            <div className="study-list">
-              {studies.map((s) => (
-                <div key={s._id} className="row-item">
-                  <div>
-                    <strong>{s.name}</strong>
-                    <small>{s.type} • v{s.version}</small>
-                  </div>
-                  <button
-                    type="button"
-                    className="danger-btn"
-                    onClick={async () => {
-                      const ok = window.confirm(`Studie \"${s.name}\" wirklich löschen?`);
-                      if (!ok) return;
-                      await studyApi.remove(s._id);
-                      const list = await refreshStudies();
-                      if (selectedStudy === s._id) {
-                        setSelectedStudy(list[0]?._id || '');
-                      }
-                    }}
-                  >
-                    Löschen
-                  </button>
-                </div>
-              ))}
-            </div>
           </>
         )}
       </CardPanel>
@@ -879,6 +927,579 @@ export function AdminPage() {
                 </div>
               </div>
             ))}
+          </CardPanel>
+        </div>
+        )}
+
+        {showImageConfig && (
+        <div className="content-row">
+          <CardPanel title="Bildbewertung">
+            <label className="form-field task-description-field">
+              <span>Aufgabenstellung Bildbewertung</span>
+              <textarea
+                rows={3}
+                value={imageRatingPrompt}
+                onChange={(e) => setImageRatingPrompt(e.target.value)}
+                placeholder="z. B. Bewerte jedes Bild nach Verständlichkeit und visueller Qualität (1-5)."
+              />
+            </label>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={async () => {
+                try {
+                  const existingCount = Array.isArray(items.images) ? items.images.length : 0;
+                  const pendingCount = Array.isArray(imageUploadFiles) ? imageUploadFiles.length : 0;
+                  if (existingCount + pendingCount < 1) {
+                    showError('Für die Aufgabenstellung müssen mindestens 1 Bild-Datei (JPG/PNG/PDF) hochgeladen sein.');
+                    return;
+                  }
+                  await studyApi.update(selectedStudy, { image_rating_prompt: imageRatingPrompt.trim() });
+                  await refreshStudies();
+                  showSuccess('Aufgabenstellung für Bildbewertung gespeichert.');
+                } catch (err) {
+                  showError(err.message || 'Aufgabenstellung konnte nicht gespeichert werden.');
+                }
+              }}
+            >
+              Aufgabenstellung speichern
+            </button>
+
+            <div className="image-task-builder">
+              <h5>Card Pool (für Bild Impression)</h5>
+              <FormField
+                label="Card-Pool Wort"
+                value={imageCardPoolInput}
+                onChange={(e) => setImageCardPoolInput(e.target.value)}
+              />
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={async () => {
+                  try {
+                    const label = String(imageCardPoolInput || '').trim();
+                    if (!label) return;
+                    if (imageCardPool.length >= 25) {
+                      showError('Maximal 25 Card-Pool Begriffe erlaubt.');
+                      return;
+                    }
+                    if (imageCardPool.includes(label)) {
+                      showError('Begriff ist bereits im Card Pool vorhanden.');
+                      return;
+                    }
+                    await studyApi.update(selectedStudy, {
+                      image_rating_card_pool: [...imageCardPool, label],
+                    });
+                    await refreshStudies();
+                    setImageCardPoolInput('');
+                    showSuccess('Card-Pool Begriff hinzugefügt.');
+                  } catch (err) {
+                    showError(err.message || 'Card-Pool Begriff konnte nicht hinzugefügt werden.');
+                  }
+                }}
+              >
+                Card-Pool Begriff hinzufügen
+              </button>
+              <small>{imageCardPool.length}/25 im Card Pool</small>
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => setImageCardPoolEditMode((v) => !v)}
+              >
+                {imageCardPoolEditMode ? 'Bearbeiten beenden' : 'Card Pool bearbeiten'}
+              </button>
+
+              <label className="form-field">
+                <span>Card Pool aus Studie übernehmen</span>
+                <select
+                  value={imageCardPoolSourceStudyId}
+                  onChange={(e) => setImageCardPoolSourceStudyId(e.target.value)}
+                >
+                  <option value="">Keine Quelle</option>
+                  {studies
+                    .filter((s) => s._id !== selectedStudy)
+                    .map((s) => (
+                      <option key={s._id} value={s._id}>{s.name}</option>
+                    ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="ghost-btn"
+                disabled={!imageCardPoolSourceStudyId}
+                onClick={async () => {
+                  try {
+                    if (!imageCardPoolSourceStudyId) return;
+                    const source = studies.find((s) => s._id === imageCardPoolSourceStudyId);
+                    const sourcePool = Array.isArray(source?.image_rating_card_pool)
+                      ? source.image_rating_card_pool.slice(0, 25)
+                      : [];
+                    if (!sourcePool.length) {
+                      showError('Quellstudie enthält keinen Card Pool.');
+                      return;
+                    }
+                    await studyApi.update(selectedStudy, {
+                      image_rating_card_pool: sourcePool,
+                    });
+                    await refreshStudies();
+                    showSuccess('Card Pool erfolgreich übernommen.');
+                  } catch (err) {
+                    showError(err.message || 'Card Pool konnte nicht übernommen werden.');
+                  }
+                }}
+              >
+                Card Pool jetzt übernehmen
+              </button>
+
+              <div className="chip-list">
+                {imageCardPool.map((label, idx) => (
+                  <div key={`${label}-${idx}`} className="profile-word-item">
+                    <div className="chip">{label}</div>
+                    {imageCardPoolEditMode && (
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          onClick={async () => {
+                            try {
+                              const next = window.prompt('Card-Pool Begriff bearbeiten', label);
+                              if (!next || String(next).trim() === label) return;
+                              const nextPool = imageCardPool.map((item, i) => (i === idx ? String(next).trim() : item));
+                              await studyApi.update(selectedStudy, { image_rating_card_pool: nextPool });
+                              await refreshStudies();
+                              showSuccess('Card-Pool Begriff gespeichert.');
+                            } catch (err) {
+                              showError(err.message || 'Speichern fehlgeschlagen.');
+                            }
+                          }}
+                        >
+                          Bearbeiten
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-btn"
+                          onClick={async () => {
+                            const ok = window.confirm('Card-Pool Begriff wirklich löschen?');
+                            if (!ok) return;
+                            const nextPool = imageCardPool.filter((_, i) => i !== idx);
+                            await studyApi.update(selectedStudy, { image_rating_card_pool: nextPool });
+                            await refreshStudies();
+                            showSuccess('Card-Pool Begriff gelöscht.');
+                          }}
+                        >
+                          Löschen
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="image-task-builder">
+              <h5>Bild-Aufgabentyp hinzufügen</h5>
+              <div className="admin-grid">
+                <label className="form-field">
+                  <span>Typ</span>
+                  <select
+                    value={imageTaskDraft.type}
+                    onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, type: e.target.value }))}
+                  >
+                    <option value="image_impression">Bild Impression (5 Sek. + 5 aus 25 Cards wählen)</option>
+                    <option value="image_questions">Fragen zum Bild</option>
+                    <option value="image_compare">Bild Vergleich</option>
+                    <option value="image_dislike_mark">Markieren was nicht gefällt</option>
+                  </select>
+                </label>
+                <FormField
+                  label="Titel"
+                  value={imageTaskDraft.title}
+                  onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, title: e.target.value }))}
+                />
+                <label className="form-field task-description-field">
+                  <span>Beschreibung</span>
+                  <textarea
+                    rows={2}
+                    value={imageTaskDraft.description}
+                    onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="Kurze Aufgabenanweisung für User"
+                  />
+                </label>
+              </div>
+
+              {(imageTaskDraft.type === 'image_impression' ||
+                imageTaskDraft.type === 'image_questions' ||
+                imageTaskDraft.type === 'image_dislike_mark') && (
+                <label className="form-field">
+                  <span>Bild auswählen</span>
+                  <select
+                    value={imageTaskDraft.image_id_a}
+                    onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, image_id_a: e.target.value }))}
+                  >
+                    <option value="">Bitte wählen</option>
+                    {(items.images || []).map((img) => (
+                      <option key={img._id} value={img._id}>{img.alt_text || img._id}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {imageTaskDraft.type === 'image_compare' && (
+                <div className="admin-grid">
+                  <label className="form-field">
+                    <span>Bild A</span>
+                    <select
+                      value={imageTaskDraft.image_id_a}
+                      onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, image_id_a: e.target.value }))}
+                    >
+                      <option value="">Bitte wählen</option>
+                      {(items.images || []).map((img) => (
+                        <option key={img._id} value={img._id}>{img.alt_text || img._id}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span>Bild B</span>
+                    <select
+                      value={imageTaskDraft.image_id_b}
+                      onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, image_id_b: e.target.value }))}
+                    >
+                      <option value="">Bitte wählen</option>
+                      {(items.images || []).map((img) => (
+                        <option key={img._id} value={img._id}>{img.alt_text || img._id}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              {imageTaskDraft.type === 'image_impression' && (
+                <div className="admin-grid">
+                  <FormField
+                    label="Bilddauer (Sek.)"
+                    value={imageTaskDraft.duration_sec}
+                    onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, duration_sec: e.target.value }))}
+                  />
+                  <FormField
+                    label="Cards Auswahl (z. B. 5)"
+                    value={imageTaskDraft.max_select}
+                    onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, max_select: e.target.value }))}
+                  />
+                  <label className="form-field task-description-field">
+                    <span>Card Pool (eine Card pro Zeile, ideal 25)</span>
+                    <textarea
+                      rows={6}
+                      value={imageTaskDraft.cards_text}
+                      onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, cards_text: e.target.value }))}
+                      placeholder={'innovativ\nübersichtlich\nmodern\nvertrauenswürdig'}
+                    />
+                  </label>
+                </div>
+              )}
+
+              {imageTaskDraft.type === 'image_questions' && (
+                <label className="form-field task-description-field">
+                  <span>Fragen (eine Frage pro Zeile)</span>
+                  <textarea
+                    rows={5}
+                    value={imageTaskDraft.questions_text}
+                    onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, questions_text: e.target.value }))}
+                    placeholder={'Was gefällt dir an diesem Bild?\nWas würdest du verbessern?'}
+                  />
+                </label>
+              )}
+
+              {imageTaskDraft.type === 'image_dislike_mark' && (
+                <FormField
+                  label="Max. Markierungen pro Bild"
+                  value={imageTaskDraft.max_marks}
+                  onChange={(e) => setImageTaskDraft((prev) => ({ ...prev, max_marks: e.target.value }))}
+                />
+              )}
+
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={async () => {
+                  try {
+                    if ((items.images || []).length < 1) {
+                      showError('Bitte zuerst mindestens 1 Bild-Datei hochladen.');
+                      return;
+                    }
+                    const nextType = String(imageTaskDraft.type || '');
+                    const title = String(imageTaskDraft.title || '').trim();
+                    if (!title) {
+                      showError('Bitte Titel für die Bild-Aufgabe eingeben.');
+                      return;
+                    }
+                    const orderIndex = imageTaskItems.length;
+                    const task_id = `imgtask_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                    const base = {
+                      task_id,
+                      type: nextType,
+                      title,
+                      description: String(imageTaskDraft.description || '').trim(),
+                      order_index: orderIndex,
+                    };
+                    const image_ids = [];
+                    if (imageTaskDraft.image_id_a) image_ids.push(imageTaskDraft.image_id_a);
+                    if (nextType === 'image_compare' && imageTaskDraft.image_id_b) image_ids.push(imageTaskDraft.image_id_b);
+
+                    if (nextType === 'image_compare' && image_ids.length < 2) {
+                      showError('Für Bildvergleich bitte zwei Bilder auswählen.');
+                      return;
+                    }
+                    if (nextType !== 'image_compare' && image_ids.length < 1) {
+                      showError('Bitte mindestens ein Bild auswählen.');
+                      return;
+                    }
+
+                    const nextTask = {
+                      ...base,
+                      image_ids,
+                      duration_sec:
+                        Number.isFinite(Number(imageTaskDraft.duration_sec)) && Number(imageTaskDraft.duration_sec) > 0
+                          ? Math.floor(Number(imageTaskDraft.duration_sec))
+                          : 5,
+                      max_select:
+                        Number.isFinite(Number(imageTaskDraft.max_select)) && Number(imageTaskDraft.max_select) > 0
+                          ? Math.floor(Number(imageTaskDraft.max_select))
+                          : 5,
+                      max_marks:
+                        Number.isFinite(Number(imageTaskDraft.max_marks)) && Number(imageTaskDraft.max_marks) > 0
+                          ? Math.floor(Number(imageTaskDraft.max_marks))
+                          : 3,
+                      cards: (() => {
+                        const typed = String(imageTaskDraft.cards_text || '')
+                          .split('\n')
+                          .map((x) => x.trim())
+                          .filter(Boolean);
+                        return typed.length ? typed : imageCardPool;
+                      })(),
+                      questions: String(imageTaskDraft.questions_text || '')
+                        .split('\n')
+                        .map((x) => x.trim())
+                        .filter(Boolean),
+                    };
+
+                    if (nextType === 'image_impression' && nextTask.cards.length < 5) {
+                      showError('Für Bild Impression bitte mehrere Cards hinterlegen (empfohlen 25).');
+                      return;
+                    }
+                    if (nextType === 'image_questions' && nextTask.questions.length < 1) {
+                      showError('Bitte mindestens eine Frage hinterlegen.');
+                      return;
+                    }
+
+                    await studyApi.update(selectedStudy, {
+                      image_rating_tasks: [...imageTaskItems, nextTask],
+                    });
+                    await refreshStudies();
+                    setImageTaskDraft({
+                      type: 'image_questions',
+                      title: '',
+                      description: '',
+                      duration_sec: '5',
+                      max_select: '5',
+                      max_marks: '3',
+                      cards_text: '',
+                      questions_text: '',
+                      image_id_a: '',
+                      image_id_b: '',
+                    });
+                    showSuccess('Bild-Aufgabe hinzugefügt.');
+                  } catch (err) {
+                    showError(err.message || 'Bild-Aufgabe konnte nicht erstellt werden.');
+                  }
+                }}
+              >
+                Bild-Aufgabe hinzufügen
+              </button>
+
+              <div className="image-task-list">
+                {imageTaskItems.map((task, idx) => (
+                  <div
+                    key={task.task_id || idx}
+                    className={`image-task-item ${imageTaskDragIndex === idx ? 'is-dragging' : ''}`}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('application/x-image-task-index', String(idx));
+                      setImageTaskDragIndex(idx);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      try {
+                        const fromIdx = Number(e.dataTransfer.getData('application/x-image-task-index'));
+                        const toIdx = Number(idx);
+                        if (!Number.isFinite(fromIdx) || !Number.isFinite(toIdx) || fromIdx === toIdx) return;
+                        const next = [...imageTaskItems];
+                        const [moved] = next.splice(fromIdx, 1);
+                        next.splice(toIdx, 0, moved);
+                        const normalized = next.map((item, order_index) => ({ ...item, order_index }));
+                        await studyApi.update(selectedStudy, { image_rating_tasks: normalized });
+                        await refreshStudies();
+                        showSuccess('Reihenfolge der Bild-Aufgaben gespeichert.');
+                      } catch (err) {
+                        showError(err.message || 'Reihenfolge konnte nicht gespeichert werden.');
+                      } finally {
+                        setImageTaskDragIndex(-1);
+                      }
+                    }}
+                    onDragEnd={() => setImageTaskDragIndex(-1)}
+                  >
+                    <strong>{task.title}</strong>
+                    <small>Typ: {task.type} • Reihenfolge: {idx + 1}</small>
+                    {!!task.description && <small>{task.description}</small>}
+                    <button
+                      type="button"
+                      className="danger-btn"
+                      onClick={async () => {
+                        const ok = window.confirm('Bild-Aufgabe wirklich löschen?');
+                        if (!ok) return;
+                        const nextTasks = imageTaskItems
+                          .filter((t) => String(t.task_id) !== String(task.task_id))
+                          .map((t, i) => ({ ...t, order_index: i }));
+                        await studyApi.update(selectedStudy, { image_rating_tasks: nextTasks });
+                        await refreshStudies();
+                        showSuccess('Bild-Aufgabe gelöscht.');
+                      }}
+                    >
+                      Löschen
+                    </button>
+                  </div>
+                ))}
+                {imageTaskItems.length === 0 && <small className="task-file-meta">Noch keine Bild-Aufgabe hinterlegt.</small>}
+              </div>
+            </div>
+
+            <label
+              className={`dropzone task-dropzone ${imageDragOver ? 'is-dragover' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setImageDragOver(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setImageDragOver(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setImageDragOver(false);
+                const files = Array.from(e.dataTransfer.files || []);
+                if (!files.length) return;
+                const invalid = files.some((file) => {
+                  const type = String(file.type || '').toLowerCase();
+                  const name = String(file.name || '').toLowerCase();
+                  return !(
+                    type === 'image/jpeg' ||
+                    type === 'image/png' ||
+                    type === 'application/pdf' ||
+                    name.endsWith('.jpg') ||
+                    name.endsWith('.jpeg') ||
+                    name.endsWith('.png') ||
+                    name.endsWith('.pdf')
+                  );
+                });
+                if (invalid) {
+                  showError('Nur JPG, PNG oder PDF Dateien sind erlaubt.');
+                  return;
+                }
+                setImageUploadFiles(files);
+              }}
+            >
+              <input
+                type="file"
+                multiple
+                accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (!files.length) return;
+                  const invalid = files.some((file) => {
+                    const type = String(file.type || '').toLowerCase();
+                    const name = String(file.name || '').toLowerCase();
+                    return !(
+                      type === 'image/jpeg' ||
+                      type === 'image/png' ||
+                      type === 'application/pdf' ||
+                      name.endsWith('.jpg') ||
+                      name.endsWith('.jpeg') ||
+                      name.endsWith('.png') ||
+                      name.endsWith('.pdf')
+                    );
+                  });
+                  if (invalid) {
+                    showError('Nur JPG, PNG oder PDF Dateien sind erlaubt.');
+                    return;
+                  }
+                  setImageUploadFiles(files);
+                }}
+              />
+              <span>Bilder (JPG/PNG/PDF) auswählen oder hierher ziehen</span>
+              {imageUploadFiles.length > 0 && (
+                <small>Ausgewählt: {imageUploadFiles.map((f) => f.name).join(', ')}</small>
+              )}
+            </label>
+            <button
+              type="button"
+              className="primary-btn"
+              disabled={imageUploadFiles.length === 0}
+              onClick={async () => {
+                try {
+                  for (const file of imageUploadFiles) {
+                    await adminApi.uploadImage(selectedStudy, file, { alt_text: file.name });
+                  }
+                  setImageUploadFiles([]);
+                  await loadContent(selectedStudy);
+                  showSuccess('Bild-Datei(en) erfolgreich hochgeladen.');
+                } catch (err) {
+                  showError(err.message || 'Bild-Upload fehlgeschlagen.');
+                }
+              }}
+            >
+              Bild-Datei hochladen
+            </button>
+
+            <div className="image-asset-list">
+              {(items.images || []).map((img) => {
+                const filename = String(img.path || '').split('/').pop() || '';
+                const isPdf = filename.toLowerCase().endsWith('.pdf');
+                return (
+                  <div key={img._id} className="image-asset-item">
+                    {isPdf ? (
+                      <a href={`${API_BASE}/uploads/${filename}`} target="_blank" rel="noreferrer" className="ghost-btn">
+                        PDF öffnen
+                      </a>
+                    ) : (
+                      <img src={`${API_BASE}/uploads/${filename}`} alt={img.alt_text || 'Bild'} />
+                    )}
+                    <div className="image-asset-meta">
+                      <small>{img.alt_text || filename}</small>
+                      <button
+                        type="button"
+                        className="danger-btn"
+                        onClick={async () => {
+                          const ok = window.confirm('Datei wirklich löschen?');
+                          if (!ok) return;
+                          await adminApi.deleteImage(img._id);
+                          await loadContent(selectedStudy);
+                          showSuccess('Bild-Datei gelöscht.');
+                        }}
+                      >
+                        Löschen
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {(!items.images || items.images.length === 0) && (
+                <small className="task-file-meta">Noch keine Bild-Datei hinterlegt.</small>
+              )}
+            </div>
           </CardPanel>
         </div>
         )}

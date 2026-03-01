@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CardPanel } from '../components/CardPanel';
 import { studyApi } from '../api/studies';
 import { analyticsApi } from '../api/analytics';
+import { API_BASE } from '../api/http';
 import './AdminAnalyticsPage.css';
 
 function defaultModulesForStudy(study) {
@@ -96,7 +97,9 @@ export function AdminAnalyticsPage() {
   const hasCardSortTab =
     configuredModules.includes('card_sort') &&
     ((overview?.card_sort?.configured_cards_total || 0) > 0 || (overview?.card_sort?.configured_columns_total || 0) > 0);
-  const hasImageTab = configuredModules.includes('image_rating') && (overview?.image_assets_total || 0) > 0;
+  const hasImageTab =
+    configuredModules.includes('image_rating') &&
+    ((overview?.image_assets_total || 0) > 0 || (overview?.image_task_work?.tasks?.length || 0) > 0);
   const hasTaskTab = (overview?.task_work?.tasks?.length || 0) > 0 || selectedStudyData?.type === 'task_work';
   const visibleTabs = useMemo(() => {
     const tabs = [];
@@ -274,6 +277,36 @@ export function AdminAnalyticsPage() {
       </div>
     );
   };
+  const uploadedAssetUrl = (path) => {
+    const filename = String(path || '').split('/').pop();
+    if (!filename) return '';
+    return `${API_BASE}/uploads/${filename}`;
+  };
+  const renderDislikeMarkPreview = (task) => {
+    const points = Array.isArray(task?.mark_points) ? task.mark_points : [];
+    const imagePath = String(task?.image_ref?.path || '');
+    const imageUrl = uploadedAssetUrl(imagePath);
+    return (
+      <div className="dislike-eval-wrap">
+        <small>
+          Ø Markierungen: {task?.avg_marks ?? 0} • Alles gefällt: {task?.liked_all ?? 0}
+        </small>
+        {renderPieChart(task?.marks_distribution || [], (row) => row.bucket, 'Keine Markierungs-Daten vorhanden.')}
+        {imageUrl ? (
+          <div className="dislike-image-wrap">
+            <img src={imageUrl} alt={task?.image_ref?.alt_text || 'Dislike-Mark-Bild'} />
+            {points.map((point, idx) => (
+              <span key={`${task.task_id}-pt-${idx}`} className="dislike-mark-point" style={{ left: `${point.x}%`, top: `${point.y}%` }}>
+                ✕
+              </span>
+            ))}
+          </div>
+        ) : (
+          <small>Kein Bild für Markierungs-Vorschau verfügbar.</small>
+        )}
+      </div>
+    );
+  };
 
   const portraitExportQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -310,6 +343,12 @@ export function AdminAnalyticsPage() {
     } else {
       sourceOverview.image_rating.forEach((row) => {
         lines.push(`Bild ${String(row._id)}: Ø ${Number(row.avg || 0).toFixed(2)} (n=${row.n})`);
+      });
+    }
+    if ((sourceOverview.image_task_work?.tasks || []).length > 0) {
+      lines.push('Bild-Aufgaben:');
+      (sourceOverview.image_task_work?.tasks || []).forEach((task, idx) => {
+        lines.push(`${idx + 1}. ${task.title || task.task_id} (${task.type}) - Antworten: ${task.total ?? 0}`);
       });
     }
     lines.push('');
@@ -366,6 +405,10 @@ export function AdminAnalyticsPage() {
             .portrait-card { border: 1px solid #e6ebf3; border-radius: 12px; padding: 8px; display: grid; gap: 4px; }
             .tag-wrap { display: flex; gap: 6px; flex-wrap: wrap; }
             .tag-chip { border: 1px solid #dbe7ff; border-radius: 999px; background: #eff6ff; color: #1e40af; padding: 2px 8px; font-size: 12px; }
+            .dislike-eval-wrap { display: grid; gap: 8px; }
+            .dislike-image-wrap { position: relative; border: 1px solid #dbe2ee; border-radius: 10px; overflow: hidden; background: #fff; max-width: 420px; }
+            .dislike-image-wrap img { display: block; width: 100%; height: auto; }
+            .dislike-mark-point { position: absolute; transform: translate(-50%, -50%); color: #dc2626; font-weight: 700; font-size: 14px; line-height: 1; text-shadow: 0 0 2px #fff; }
             @media (max-width: 900px) { .report-preview-page { width: 100%; min-height: auto; padding: 16px; } .report-diagram-grid, .report-portrait-grid, .profile-agg-grid { grid-template-columns: 1fr; } }
             @media print { body { background: #fff; margin: 0; } .print-toolbar { display: none; } .report-preview-page { width: auto; min-height: auto; margin: 0; box-shadow: none; padding: 10mm; } }
           </style>
@@ -760,6 +803,28 @@ export function AdminAnalyticsPage() {
                     (row) => row.label,
                     'Keine Bilddaten vorhanden.'
                   )}
+                  {(overview.image_task_work?.tasks || []).length > 0 && (
+                    <div className="qa-answer-list">
+                      <p className="qa-question">Bild-Aufgaben</p>
+                      {(overview.image_task_work?.tasks || []).map((task) => (
+                        <section key={`report-image-task-${task.task_id}`} className="qa-block qa-nested">
+                          <p className="qa-question">{task.title || task.task_id} ({task.type})</p>
+                          {task.type === 'image_compare' &&
+                            renderPieChart(task.option_distribution || [], (row) => row.option, 'Keine Vergleichs-Daten vorhanden.')}
+                          {task.type === 'image_impression' &&
+                            renderPieChart((task.card_distribution || []).slice(0, 8), (row) => row.card, 'Keine Card-Auswahl-Daten vorhanden.')}
+                          {task.type === 'image_dislike_mark' && renderDislikeMarkPreview(task)}
+                          {task.type === 'image_questions' &&
+                            (task.questions || []).map((q, idx) => (
+                              <div key={`report-image-task-q-${task.task_id}-${idx}`}>
+                                <small>{q.question || `Frage ${idx + 1}`}</small>
+                                {renderCountBars(q.top_answers || [], (row) => row.answer, 'Keine Antwortdaten vorhanden.')}
+                              </div>
+                            ))}
+                        </section>
+                      ))}
+                    </div>
+                  )}
                 </article>
               )}
               {reportIncludeCharts.task_work && (
@@ -1037,6 +1102,36 @@ export function AdminAnalyticsPage() {
                     ))
                   ) : (
                     <p>Keine Bildauswertungs-Daten vorhanden.</p>
+                  )}
+                  {(overview.image_task_work?.tasks || []).length > 0 && (
+                    <div className="module-stack">
+                      <section className="qa-block">
+                        <p className="qa-question">Bild-Aufgaben Auswertung</p>
+                        {(overview.image_task_work?.tasks || []).map((task) => (
+                          <article key={task.task_id} className="qa-block qa-nested">
+                            <p className="qa-question">{task.title || task.task_id} ({task.type})</p>
+                            <small>Antworten: {task.total ?? 0} • Zeit abgelaufen: {task.timed_out ?? 0}</small>
+                            {task.type === 'image_compare' && (
+                              renderPieChart(task.option_distribution || [], (row) => row.option, 'Keine Vergleichs-Daten vorhanden.')
+                            )}
+                            {task.type === 'image_impression' && (
+                              renderPieChart((task.card_distribution || []).slice(0, 8), (row) => row.card, 'Keine Card-Auswahl-Daten vorhanden.')
+                            )}
+                            {task.type === 'image_dislike_mark' && renderDislikeMarkPreview(task)}
+                            {task.type === 'image_questions' && (
+                              <div className="qa-answer-list">
+                                {(task.questions || []).map((q, idx) => (
+                                  <section key={`${task.task_id}-q-${idx}`} className="qa-block qa-nested">
+                                    <p className="qa-question">{q.question || `Frage ${idx + 1}`}</p>
+                                    {renderCountBars(q.top_answers || [], (row) => row.answer, 'Keine Antwortdaten vorhanden.')}
+                                  </section>
+                                ))}
+                              </div>
+                            )}
+                          </article>
+                        ))}
+                      </section>
+                    </div>
                   )}
                 </div>
               )}

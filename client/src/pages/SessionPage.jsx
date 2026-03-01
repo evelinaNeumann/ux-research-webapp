@@ -70,6 +70,10 @@ export function SessionPage() {
   const snapTimerRef = useRef(null);
   const taskEndRedirectTimerRef = useRef(null);
   const [imageInputs, setImageInputs] = useState({});
+  const [imageTaskResponses, setImageTaskResponses] = useState({});
+  const [imageImpressionStateByTask, setImageImpressionStateByTask] = useState({});
+  const [activeImageTaskIndex, setActiveImageTaskIndex] = useState(0);
+  const imageImpressionTimersRef = useRef({});
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
   const [activeModule, setActiveModule] = useState('');
@@ -101,6 +105,7 @@ export function SessionPage() {
           researchApi.getCardSortBySession(s._id),
           researchApi.getImageRatingsBySession(s._id),
         ]);
+        const savedImageTaskResponses = await researchApi.getImageTaskResponsesBySession(s._id);
         const savedTaskResponses = await researchApi.getTaskResponsesBySession(s._id);
 
         const answerMap = {};
@@ -130,6 +135,17 @@ export function SessionPage() {
           };
         }
         setImageInputs(ratingsMap);
+        setImageTaskResponses(
+          Object.fromEntries(
+            (savedImageTaskResponses || []).map((entry) => [
+              String(entry.task_id),
+              {
+                payload: entry.payload || {},
+                timed_out: !!entry.timed_out,
+              },
+            ])
+          )
+        );
         setTaskResponses(
           Object.fromEntries(
             (savedTaskResponses || []).map((entry) => [
@@ -149,7 +165,7 @@ export function SessionPage() {
         const available = orderedModules.filter((m) => {
           if (m === 'questionnaire') return (q || []).length > 0;
           if (m === 'card_sort') return (c || []).length > 0 && (columns || []).length > 0;
-          if (m === 'image_rating') return (i || []).length > 0;
+          if (m === 'image_rating') return (i || []).length > 0 || (st.image_rating_tasks || []).length > 0;
           return true;
         });
         setActiveModule(available[0] || '');
@@ -164,6 +180,7 @@ export function SessionPage() {
     () => () => {
       if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
       if (taskEndRedirectTimerRef.current) clearTimeout(taskEndRedirectTimerRef.current);
+      Object.values(imageImpressionTimersRef.current || {}).forEach((timerId) => clearTimeout(timerId));
     },
     []
   );
@@ -397,6 +414,21 @@ export function SessionPage() {
     });
   }, [tasks.length]);
 
+  const isReadOnly = session?.status === 'done';
+  const imageRatingPrompt = String(study?.image_rating_prompt || '').trim();
+  const imageRatingTasks = Array.isArray(study?.image_rating_tasks)
+    ? [...study.image_rating_tasks].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
+    : [];
+  const imagesById = Object.fromEntries((images || []).map((img) => [String(img._id), img]));
+
+  useEffect(() => {
+    if (!imageRatingTasks.length) {
+      setActiveImageTaskIndex(0);
+      return;
+    }
+    setActiveImageTaskIndex((prev) => Math.min(Math.max(prev, 0), imageRatingTasks.length - 1));
+  }, [imageRatingTasks.length]);
+
   const saveQuestionnaire = async () => {
     if (!session) return;
     setMessage('');
@@ -427,7 +459,23 @@ export function SessionPage() {
     if (!session) return;
     setMessage('');
     try {
-      await persistImageRatings();
+      if (imageRatingTasks.length > 0) {
+        for (const task of imageRatingTasks) {
+          const taskId = String(task.task_id || '');
+          if (!taskId) continue;
+          if (!isImageTaskAnswered(task) && !imageTaskResponses[taskId]?.timed_out) continue;
+          const response = imageTaskResponses[taskId]?.payload || {};
+          await researchApi.submitImageTaskResponse({
+            session_id: session._id,
+            task_id: taskId,
+            task_type: task.type,
+            payload: response,
+            timed_out: !!imageTaskResponses[taskId]?.timed_out,
+          });
+        }
+      } else {
+        await persistImageRatings();
+      }
       setMessage('Bildbewertungen gespeichert.');
       setMessageType('success');
     } catch (err) {
@@ -435,6 +483,60 @@ export function SessionPage() {
       setMessageType('error');
     }
   };
+
+  const isImageTaskAnswered = (task) => {
+    const taskId = String(task.task_id || '');
+    const payload = imageTaskResponses[taskId]?.payload || {};
+    if (task.type === 'image_impression') {
+      const selected = Array.isArray(payload.selected_cards) ? payload.selected_cards : [];
+      const required = Number(task.max_select || 5) || 5;
+      return selected.length >= required;
+    }
+    if (task.type === 'image_questions') {
+      const questions = Array.isArray(task.questions) ? task.questions : [];
+      const answers = Array.isArray(payload.answers) ? payload.answers : [];
+      if (!questions.length) return false;
+      return questions.every((_, idx) => String(answers[idx] || '').trim() !== '');
+    }
+    if (task.type === 'image_compare') {
+      return !!String(payload.selected_image_id || '').trim();
+    }
+    if (task.type === 'image_dislike_mark') {
+      const marks = Array.isArray(payload.marks) ? payload.marks : [];
+      return marks.length > 0 || !!payload.liked_all;
+    }
+    return false;
+  };
+  const isImageTaskCompleted = (task) => {
+    const taskId = String(task?.task_id || '');
+    if (!taskId) return false;
+    if (imageTaskResponses[taskId]?.timed_out) return true;
+    return isImageTaskAnswered(task);
+  };
+
+  useEffect(() => {
+    if (activeModule !== 'image_rating' || isReadOnly) return;
+    for (const task of imageRatingTasks) {
+      if (task.type !== 'image_impression') continue;
+      const taskId = String(task.task_id || '');
+      if (!taskId) continue;
+      if (imageTaskResponses[taskId]?.timed_out) continue;
+      if (imageTaskResponses[taskId]?.payload?.selected_cards?.length) continue;
+      if (imageImpressionStateByTask[taskId]) continue;
+      setImageImpressionStateByTask((prev) => ({ ...prev, [taskId]: 'show' }));
+      const durationMs = Math.max(1, Number(task.duration_sec || 5)) * 1000;
+      imageImpressionTimersRef.current[taskId] = setTimeout(async () => {
+        setImageImpressionStateByTask((prev) => ({ ...prev, [taskId]: 'select' }));
+        setImageTaskResponses((prev) => ({
+          ...prev,
+          [taskId]: {
+            payload: prev[taskId]?.payload || {},
+            timed_out: !!prev[taskId]?.timed_out,
+          },
+        }));
+      }, durationMs);
+    }
+  }, [activeModule, imageRatingTasks, imageTaskResponses, imageImpressionStateByTask, isReadOnly, session?._id]);
 
   const completeSession = async () => {
     if (!session) return;
@@ -470,15 +572,24 @@ export function SessionPage() {
         return;
       }
 
-      if (orderedModules.includes('image_rating') && images.length > 0) {
-        const rated = images.filter((img) => {
-          const value = imageInputs[img._id]?.rating;
-          return value !== undefined && value !== null && String(value).trim() !== '';
-        }).length;
-        if (rated < images.length) {
-          setMessageType('error');
-          setMessage('Bitte zuerst alle Bildbewertungen fertigstellen.');
-          return;
+      if (orderedModules.includes('image_rating') && (images.length > 0 || imageRatingTasks.length > 0)) {
+        if (imageRatingTasks.length > 0) {
+          const missingTask = imageRatingTasks.find((task) => !isImageTaskCompleted(task));
+          if (missingTask) {
+            setMessageType('error');
+            setMessage(`Bitte zuerst die Bild-Aufgabe "${missingTask.title || missingTask.type}" fertigstellen.`);
+            return;
+          }
+        } else {
+          const rated = images.filter((img) => {
+            const value = imageInputs[img._id]?.rating;
+            return value !== undefined && value !== null && String(value).trim() !== '';
+          }).length;
+          if (rated < images.length) {
+            setMessageType('error');
+            setMessage('Bitte zuerst alle Bildbewertungen fertigstellen.');
+            return;
+          }
         }
       }
 
@@ -502,7 +613,21 @@ export function SessionPage() {
       }
       await persistQuestionnaire();
       await persistCardSort();
-      await persistImageRatings();
+      if (imageRatingTasks.length > 0) {
+        for (const task of imageRatingTasks) {
+          const taskId = String(task.task_id || '');
+          if (!taskId) continue;
+          await researchApi.submitImageTaskResponse({
+            session_id: session._id,
+            task_id: taskId,
+            task_type: task.type,
+            payload: imageTaskResponses[taskId]?.payload || {},
+            timed_out: !!imageTaskResponses[taskId]?.timed_out,
+          });
+        }
+      } else {
+        await persistImageRatings();
+      }
       await sessionApi.complete(session._id);
       navigate('/');
     } catch (err) {
@@ -512,13 +637,12 @@ export function SessionPage() {
   };
 
   if (!session || !study) return <div className="splash">Session wird geladen...</div>;
-  const isReadOnly = session.status === 'done';
 
   const orderedModules = study.module_order?.length ? study.module_order : defaultModulesForStudy(study);
   const modules = orderedModules.filter((m) => {
     if (m === 'questionnaire') return questions.length > 0;
     if (m === 'card_sort') return cards.length > 0 && cardSortColumns.length > 0;
-    if (m === 'image_rating') return images.length > 0;
+    if (m === 'image_rating') return images.length > 0 || imageRatingTasks.length > 0;
     return true;
   });
   const availableColumns = [...cardSortColumns.map((x) => x.label), ...customColumns];
@@ -1093,47 +1217,297 @@ export function SessionPage() {
 
       {modules.includes('image_rating') && activeModule === 'image_rating' && (
         <CardPanel title={isReadOnly ? 'Bildbewertung ansehen' : 'Bildbewertung bearbeiten'}>
-          {images.length === 0 && <p>Keine Bilder vorhanden.</p>}
-          {images.map((img) => (
-            <div className="image-row" key={img._id}>
-              <img
-                src={`${API_BASE}/uploads/${String(img.path || '').split('/').pop()}`}
-                alt={img.alt_text || 'image'}
-              />
-              <div className="image-fields">
-                <label className="form-row">
-                  <span>Rating (1-5)</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="5"
-                    value={imageInputs[img._id]?.rating || ''}
-                    disabled={isReadOnly}
-                    onChange={(e) =>
-                      setImageInputs({
-                        ...imageInputs,
-                        [img._id]: { ...(imageInputs[img._id] || {}), rating: e.target.value },
-                      })
-                    }
-                  />
-                </label>
-                <label className="form-row">
-                  <span>Feedback</span>
-                  <input
-                    value={imageInputs[img._id]?.feedback || ''}
-                    disabled={isReadOnly}
-                    onChange={(e) =>
-                      setImageInputs({
-                        ...imageInputs,
-                        [img._id]: { ...(imageInputs[img._id] || {}), feedback: e.target.value },
-                      })
-                    }
-                  />
-                </label>
-              </div>
+          {imageRatingPrompt && <p className="hint-text">{imageRatingPrompt}</p>}
+          {imageRatingTasks.length > 0 ? (
+            <div className="image-task-user-list">
+              {(() => {
+                const safeImageTaskIndex = Math.min(Math.max(activeImageTaskIndex, 0), imageRatingTasks.length - 1);
+                const task = imageRatingTasks[safeImageTaskIndex];
+                const taskId = String(task.task_id || '');
+                const response = imageTaskResponses[taskId]?.payload || {};
+                const imageA = imagesById[String(task.image_ids?.[0] || '')];
+                const imageB = imagesById[String(task.image_ids?.[1] || '')];
+                const renderImage = (img) => {
+                  if (!img) return <small className="task-file-meta">Bild nicht gefunden.</small>;
+                  const filename = String(img.path || '').split('/').pop();
+                  return String(img.path || '').toLowerCase().endsWith('.pdf') ? (
+                    <a href={`${API_BASE}/uploads/${filename}`} target="_blank" rel="noreferrer" className="ghost-btn">PDF öffnen</a>
+                  ) : (
+                    <img src={`${API_BASE}/uploads/${filename}`} alt={img.alt_text || 'image'} />
+                  );
+                };
+
+                return (
+                  <div key={`${taskId}-${safeImageTaskIndex}`} className="image-task-user-item">
+                    <div className="task-head-row">
+                      <div className="task-head-left">
+                        <strong>{task.title || task.type}</strong>
+                        {!!task.description && <small>{task.description}</small>}
+                      </div>
+                      <div className="task-switch-block">
+                        <small>
+                          Bild-Aufgabe {safeImageTaskIndex + 1} von {imageRatingTasks.length}
+                        </small>
+                        <div className="task-switch-arrows">
+                          <button
+                            type="button"
+                            className="ghost-btn arrow-btn"
+                            aria-label="Vorherige Bild-Aufgabe"
+                            disabled={safeImageTaskIndex <= 0}
+                            onClick={() => setActiveImageTaskIndex((prev) => Math.max(0, prev - 1))}
+                          >
+                            ←
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-btn arrow-btn"
+                            aria-label="Nächste Bild-Aufgabe"
+                            disabled={safeImageTaskIndex >= imageRatingTasks.length - 1}
+                            onClick={() => setActiveImageTaskIndex((prev) => Math.min(imageRatingTasks.length - 1, prev + 1))}
+                          >
+                            →
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {task.type === 'image_impression' && (
+                      <>
+                        {imageImpressionStateByTask[taskId] === 'show' ? (
+                          <div className="image-preview-wrap">{renderImage(imageA)}</div>
+                        ) : (
+                          <div className="chip-list">
+                            {(task.cards || []).map((card) => {
+                              const selected = (response.selected_cards || []).includes(card);
+                              const maxSelect = Number(task.max_select || 5) || 5;
+                              return (
+                                <button
+                                  key={`${taskId}-${card}`}
+                                  type="button"
+                                  className={selected ? 'chip-item active' : 'chip-item'}
+                                  disabled={isReadOnly}
+                                  onClick={() => {
+                                    if (isReadOnly) return;
+                                    const current = Array.isArray(response.selected_cards) ? response.selected_cards : [];
+                                    const exists = current.includes(card);
+                                    let next = exists ? current.filter((x) => x !== card) : [...current, card];
+                                    if (next.length > maxSelect) next = next.slice(0, maxSelect);
+                                    setImageTaskResponses((prev) => ({
+                                      ...prev,
+                                      [taskId]: { payload: { ...response, selected_cards: next }, timed_out: !!prev[taskId]?.timed_out },
+                                    }));
+                                    if (!exists && next.length >= maxSelect && safeImageTaskIndex < imageRatingTasks.length - 1) {
+                                      setActiveImageTaskIndex(safeImageTaskIndex + 1);
+                                    }
+                                  }}
+                                >
+                                  {card}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {task.type === 'image_questions' && (
+                      <div className="image-row">
+                        <div className="image-preview-wrap">{renderImage(imageA)}</div>
+                        <div className="image-fields">
+                          {(task.questions || []).map((q, idx) => (
+                            <label key={`${taskId}-q-${idx}`} className="form-row">
+                              <span>{q}</span>
+                              <input
+                                value={(response.answers || [])[idx] || ''}
+                                disabled={isReadOnly}
+                                onChange={(e) => {
+                                  const nextAnswers = Array.isArray(response.answers) ? [...response.answers] : [];
+                                  nextAnswers[idx] = e.target.value;
+                                  setImageTaskResponses((prev) => ({
+                                    ...prev,
+                                    [taskId]: { payload: { ...response, answers: nextAnswers }, timed_out: !!prev[taskId]?.timed_out },
+                                  }));
+                                }}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {task.type === 'image_compare' && (
+                      <div className="image-compare-row">
+                        {[imageA, imageB].map((img, idx) => {
+                          const imageId = String(img?._id || '');
+                          const selected = String(response.selected_image_id || '') === imageId;
+                          return (
+                            <button
+                              type="button"
+                              key={`${taskId}-cmp-${idx}`}
+                              className={selected ? 'image-compare-choice active' : 'image-compare-choice'}
+                              disabled={isReadOnly || !imageId}
+                              onClick={() =>
+                                setImageTaskResponses((prev) => ({
+                                  ...prev,
+                                  [taskId]: { payload: { ...response, selected_image_id: imageId }, timed_out: !!prev[taskId]?.timed_out },
+                                }))
+                              }
+                            >
+                              <div className="image-preview-wrap">{renderImage(img)}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {task.type === 'image_dislike_mark' && (
+                      <div className="image-row">
+                        <div
+                          className="image-preview-wrap image-mark-wrap"
+                          onDragOver={(e) => {
+                            if (isReadOnly) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                          }}
+                          onDrop={(e) => {
+                            if (isReadOnly) return;
+                            e.preventDefault();
+                            if (response.liked_all) return;
+                            const payload = String(e.dataTransfer.getData('application/x-dislike-mark') || '');
+                            if (payload !== 'mark') return;
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = ((e.clientX - rect.left) / rect.width) * 100;
+                            const y = ((e.clientY - rect.top) / rect.height) * 100;
+                            const current = Array.isArray(response.marks) ? [...response.marks] : [];
+                            const maxMarks = Number(task.max_marks || 3) || 3;
+                            if (current.length >= maxMarks) return;
+                            current.push({ x, y });
+                            setImageTaskResponses((prev) => ({
+                              ...prev,
+                              [taskId]: { payload: { ...response, marks: current }, timed_out: !!prev[taskId]?.timed_out },
+                            }));
+                          }}
+                        >
+                          {renderImage(imageA)}
+                          {(response.marks || []).map((mark, idx) => (
+                            <span key={`${taskId}-mark-${idx}`} className="mark-cross" style={{ left: `${mark.x}%`, top: `${mark.y}%` }}>✕</span>
+                          ))}
+                        </div>
+                        <div className="image-fields">
+                          <small>Markiere bis zu {Number(task.max_marks || 3) || 3} Bereiche, die dir nicht gefallen.</small>
+                          <label className="form-row inline-check">
+                            <input
+                              type="checkbox"
+                              checked={!!response.liked_all}
+                              disabled={isReadOnly}
+                              onChange={(e) => {
+                                const likedAll = !!e.target.checked;
+                                setImageTaskResponses((prev) => ({
+                                  ...prev,
+                                  [taskId]: {
+                                    payload: {
+                                      ...response,
+                                      liked_all: likedAll,
+                                      marks: likedAll ? [] : Array.isArray(response.marks) ? response.marks : [],
+                                    },
+                                    timed_out: !!prev[taskId]?.timed_out,
+                                  },
+                                }));
+                              }}
+                            />
+                            <span>Alles gefällt</span>
+                          </label>
+                          {!isReadOnly && (
+                            <div className="mark-palette">
+                              {Array.from({
+                                length: response.liked_all
+                                  ? 0
+                                  : Math.max((Number(task.max_marks || 3) || 3) - ((response.marks || []).length || 0), 0),
+                              }).map((_, idx) => (
+                                <span
+                                  key={`${taskId}-drag-mark-${idx}`}
+                                  className="mark-token"
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.effectAllowed = 'move';
+                                    e.dataTransfer.setData('application/x-dislike-mark', 'mark');
+                                  }}
+                                >
+                                  ✕
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
-          ))}
-          {!isReadOnly && <button className="primary-btn" onClick={saveImageRatings}>Antworten speichern</button>}
+          ) : (
+            <>
+              {images.length === 0 && <p>Keine Bilder vorhanden.</p>}
+              {images.map((img) => (
+                <div className="image-row" key={img._id}>
+                  <div className="image-preview-wrap">
+                    {String(img.path || '').toLowerCase().endsWith('.pdf') ? (
+                      <a
+                        href={`${API_BASE}/uploads/${String(img.path || '').split('/').pop()}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ghost-btn"
+                      >
+                        PDF öffnen
+                      </a>
+                    ) : (
+                      <img
+                        src={`${API_BASE}/uploads/${String(img.path || '').split('/').pop()}`}
+                        alt={img.alt_text || 'image'}
+                      />
+                    )}
+                  </div>
+                  <div className="image-fields">
+                    <label className="form-row">
+                      <span>Rating (1-5)</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="5"
+                        value={imageInputs[img._id]?.rating || ''}
+                        disabled={isReadOnly}
+                        onChange={(e) =>
+                          setImageInputs({
+                            ...imageInputs,
+                            [img._id]: { ...(imageInputs[img._id] || {}), rating: e.target.value },
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="form-row">
+                      <span>Feedback</span>
+                      <input
+                        value={imageInputs[img._id]?.feedback || ''}
+                        disabled={isReadOnly}
+                        onChange={(e) =>
+                          setImageInputs({
+                            ...imageInputs,
+                            [img._id]: { ...(imageInputs[img._id] || {}), feedback: e.target.value },
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+          {!isReadOnly && (
+            <div className="image-save-row">
+              <div />
+              <button className="primary-btn" onClick={saveImageRatings}>Antworten speichern</button>
+            </div>
+          )}
         </CardPanel>
       )}
 

@@ -10,6 +10,7 @@ import { CardSort } from '../models/CardSort.js';
 import { CardSortColumn } from '../models/CardSortColumn.js';
 import { ImageAsset } from '../models/ImageAsset.js';
 import { ImageRating } from '../models/ImageRating.js';
+import { ImageTaskResponse } from '../models/ImageTaskResponse.js';
 import { ResearchTask } from '../models/ResearchTask.js';
 import { TaskResponse } from '../models/TaskResponse.js';
 import { getPagination } from '../middleware/pagination.js';
@@ -98,7 +99,7 @@ router.put('/:id/complete', async (req, res, next) => {
     const item = await Session.findById(req.params.id);
     if (!item) throw notFound('session not found');
     if (req.auth.role !== 'admin' && String(item.user_id) !== req.auth.sub) throw forbidden();
-    const study = await Study.findById(item.study_id, { module_order: 1, type: 1 });
+    const study = await Study.findById(item.study_id, { module_order: 1, type: 1, image_rating_tasks: 1 });
     if (!study) throw notFound('study not found');
     const modules = study.module_order?.length ? study.module_order : defaultModulesForStudy(study);
 
@@ -146,20 +147,36 @@ router.put('/:id/complete', async (req, res, next) => {
     }
 
     if (needsImageRating) {
-      const images = await ImageAsset.find({ study_id: item.study_id }, { _id: 1 });
-      if (images.length > 0) {
-        const imageIds = images.map((x) => x._id);
-        const ratings = await ImageRating.find(
-          { session_id: item._id, image_id: { $in: imageIds } },
-          { image_id: 1, rating: 1 }
+      const imageTaskDefs = Array.isArray(study.image_rating_tasks)
+        ? study.image_rating_tasks.filter((task) => String(task?.task_id || '').trim())
+        : [];
+      if (imageTaskDefs.length > 0) {
+        const requiredTaskIds = imageTaskDefs.map((task) => String(task.task_id));
+        const taskResponses = await ImageTaskResponse.find(
+          { session_id: item._id, task_id: { $in: requiredTaskIds } },
+          { task_id: 1 }
         );
-        const rated = new Set(
-          ratings
-            .filter((r) => r.rating !== undefined && r.rating !== null && Number(r.rating) >= 1)
-            .map((r) => String(r.image_id))
-        );
-        if (rated.size < images.length) {
-          throw badRequest('Bitte zuerst alle Bildbewertungen fertigstellen.');
+        const respondedTaskIds = new Set(taskResponses.map((row) => String(row.task_id)));
+        const missingTask = imageTaskDefs.find((task) => !respondedTaskIds.has(String(task.task_id)));
+        if (missingTask) {
+          throw badRequest(`Bitte zuerst die Bild-Aufgabe "${String(missingTask.title || missingTask.type || 'Bildaufgabe')}" fertigstellen.`);
+        }
+      } else {
+        const images = await ImageAsset.find({ study_id: item.study_id }, { _id: 1 });
+        if (images.length > 0) {
+          const imageIds = images.map((x) => x._id);
+          const ratings = await ImageRating.find(
+            { session_id: item._id, image_id: { $in: imageIds } },
+            { image_id: 1, rating: 1 }
+          );
+          const rated = new Set(
+            ratings
+              .filter((r) => r.rating !== undefined && r.rating !== null && Number(r.rating) >= 1)
+              .map((r) => String(r.image_id))
+          );
+          if (rated.size < images.length) {
+            throw badRequest('Bitte zuerst alle Bildbewertungen fertigstellen.');
+          }
         }
       }
     }

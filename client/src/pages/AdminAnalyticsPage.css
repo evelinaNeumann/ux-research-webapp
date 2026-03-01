@@ -444,6 +444,36 @@
   margin: 0;
 }
 
+.dislike-eval-wrap {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.dislike-image-wrap {
+  position: relative;
+  border: 1px solid #dbe2ee;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  max-width: 420px;
+}
+
+.dislike-image-wrap img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.dislike-mark-point {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: #dc2626;
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1;
+  text-shadow: 0 0 2px #fff;
+}
+
 @media (max-width: 900px) {
   .report-diagram-grid {
     grid-template-columns: 1fr;

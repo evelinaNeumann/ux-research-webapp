@@ -1,6 +1,7 @@
 import { Answer } from '../models/Answer.js';
 import { ImageRating } from '../models/ImageRating.js';
 import { ImageAsset } from '../models/ImageAsset.js';
+import { ImageTaskResponse } from '../models/ImageTaskResponse.js';
 import { CardSort } from '../models/CardSort.js';
 import { Session } from '../models/Session.js';
 import { Question } from '../models/Question.js';
@@ -9,6 +10,7 @@ import { Card } from '../models/Card.js';
 import { CardSortColumn } from '../models/CardSortColumn.js';
 import { ResearchTask } from '../models/ResearchTask.js';
 import { TaskResponse } from '../models/TaskResponse.js';
+import { Study } from '../models/Study.js';
 import mongoose from 'mongoose';
 
 function buildSessionMatch(filters = {}) {
@@ -273,12 +275,15 @@ export async function analyticsOverview(filters = {}) {
 
   const taskMatch = filters.studyId ? { study_id: studyMatch } : {};
   if (filteredUserIds) taskMatch.user_id = { $in: filteredUserIds };
-  const [imageAssetsTotal, taskDefs, taskResponses] = await Promise.all([
+  const [imageAssetsTotal, imageAssets, taskDefs, taskResponses, imageTaskResponses, studyForImageTasks] = await Promise.all([
     ImageAsset.countDocuments(filters.studyId ? { study_id: studyMatch } : {}),
+    ImageAsset.find(filters.studyId ? { study_id: studyMatch } : {}, { _id: 1, path: 1, alt_text: 1 }).lean(),
     ResearchTask.find(filters.studyId ? { study_id: studyMatch } : {}, { _id: 1, title: 1, description: 1, steps: 1 })
       .sort({ order_index: 1, _id: 1 })
       .lean(),
     TaskResponse.find(taskMatch, { task_id: 1, step_index: 1, is_correct: 1, timed_out: 1 }).lean(),
+    ImageTaskResponse.find(taskMatch, { task_id: 1, task_type: 1, payload: 1, timed_out: 1 }).lean(),
+    filters.studyId ? Study.findById(studyMatch, { image_rating_tasks: 1 }).lean() : null,
   ]);
   const responsesByTaskStep = new Map();
   for (const row of taskResponses) {
@@ -325,6 +330,151 @@ export async function analyticsOverview(filters = {}) {
     tasks: taskItems,
   };
 
+  const imageTaskDefs = Array.isArray(studyForImageTasks?.image_rating_tasks)
+    ? [...studyForImageTasks.image_rating_tasks].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
+    : [];
+  const imageAssetById = new Map((imageAssets || []).map((img) => [String(img._id), img]));
+  const imageTaskResponsesByTask = new Map();
+  for (const row of imageTaskResponses || []) {
+    const key = String(row.task_id || '');
+    if (!key) continue;
+    if (!imageTaskResponsesByTask.has(key)) imageTaskResponsesByTask.set(key, []);
+    imageTaskResponsesByTask.get(key).push(row);
+  }
+  const imageTaskWorkTasks = imageTaskDefs.map((taskDef) => {
+    const taskId = String(taskDef.task_id || '');
+    const rows = imageTaskResponsesByTask.get(taskId) || [];
+    const total = rows.length;
+    const taskType = String(taskDef.type || '');
+    const timedOut = rows.filter((x) => !!x.timed_out).length;
+
+    if (taskType === 'image_compare') {
+      const optionCount = {};
+      for (const row of rows) {
+        const selected = String(row.payload?.selected_image_id || '').trim();
+        if (!selected) continue;
+        optionCount[selected] = (optionCount[selected] || 0) + 1;
+      }
+      return {
+        task_id: taskId,
+        type: taskType,
+        title: taskDef.title || taskId,
+        total,
+        timed_out: timedOut,
+        option_distribution: toSortedRows(optionCount, 'option'),
+      };
+    }
+
+    if (taskType === 'image_impression') {
+      const cardCount = {};
+      for (const row of rows) {
+        const selected = Array.isArray(row.payload?.selected_cards) ? row.payload.selected_cards : [];
+        for (const card of selected) {
+          const label = String(card || '').trim();
+          if (!label) continue;
+          cardCount[label] = (cardCount[label] || 0) + 1;
+        }
+      }
+      return {
+        task_id: taskId,
+        type: taskType,
+        title: taskDef.title || taskId,
+        total,
+        timed_out: timedOut,
+        card_distribution: toSortedRows(cardCount, 'card'),
+      };
+    }
+
+    if (taskType === 'image_questions') {
+      const questions = Array.isArray(taskDef.questions) ? taskDef.questions : [];
+      const questionStats = questions.map((question, idx) => {
+        const answerCount = {};
+        let n = 0;
+        for (const row of rows) {
+          const ans = String((Array.isArray(row.payload?.answers) ? row.payload.answers[idx] : '') || '').trim();
+          if (!ans) continue;
+          n += 1;
+          const norm = ans.toLocaleLowerCase('de-DE');
+          answerCount[norm] = (answerCount[norm] || 0) + 1;
+        }
+        return {
+          question,
+          n,
+          top_answers: toSortedRows(answerCount, 'answer').slice(0, 10),
+        };
+      });
+      return {
+        task_id: taskId,
+        type: taskType,
+        title: taskDef.title || taskId,
+        total,
+        timed_out: timedOut,
+        questions: questionStats,
+      };
+    }
+
+    if (taskType === 'image_dislike_mark') {
+      const markBuckets = { 'Alles gefällt': 0, '0': 0, '1': 0, '2': 0, '3+': 0 };
+      let markSum = 0;
+      let likedAll = 0;
+      const markPoints = [];
+      for (const row of rows) {
+        const rowLikedAll = !!row.payload?.liked_all;
+        const marks = Array.isArray(row.payload?.marks) ? row.payload.marks.length : 0;
+        if (rowLikedAll) {
+          likedAll += 1;
+          markBuckets['Alles gefällt'] += 1;
+        } else if (marks <= 0) markBuckets['0'] += 1;
+        else if (marks === 1) markBuckets['1'] += 1;
+        else if (marks === 2) markBuckets['2'] += 1;
+        else markBuckets['3+'] += 1;
+        if (!rowLikedAll) markSum += marks;
+        const points = Array.isArray(row.payload?.marks) ? row.payload.marks : [];
+        for (const point of points) {
+          const x = Number(point?.x);
+          const y = Number(point?.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+          markPoints.push({
+            x: Math.max(0, Math.min(100, x)),
+            y: Math.max(0, Math.min(100, y)),
+          });
+        }
+      }
+      const imageId = String(taskDef.image_ids?.[0] || '');
+      const imageRef = imageAssetById.get(imageId) || null;
+      return {
+        task_id: taskId,
+        type: taskType,
+        title: taskDef.title || taskId,
+        total,
+        timed_out: timedOut,
+        liked_all: likedAll,
+        avg_marks: total > 0 ? Number((markSum / total).toFixed(2)) : 0,
+        marks_distribution: toSortedRows(markBuckets, 'bucket'),
+        mark_points: markPoints,
+        image_ref: imageRef
+          ? {
+              _id: String(imageRef._id),
+              path: String(imageRef.path || ''),
+              alt_text: String(imageRef.alt_text || ''),
+            }
+          : null,
+      };
+    }
+
+    return {
+      task_id: taskId,
+      type: taskType || 'unknown',
+      title: taskDef.title || taskId,
+      total,
+      timed_out: timedOut,
+    };
+  });
+  const imageTaskWork = {
+    submissions_total: imageTaskResponses.length,
+    tasks: imageTaskWorkTasks,
+  };
+
   return {
     sessions_total: sessionsTotal,
     sessions_done: sessionsDone,
@@ -336,6 +486,7 @@ export async function analyticsOverview(filters = {}) {
     card_sort_submissions: cardsortCount,
     card_sort: cardSort,
     task_work: taskWork,
+    image_task_work: imageTaskWork,
   };
 }
 
@@ -386,6 +537,23 @@ export function flattenExport(overview, filters = {}) {
       value: Number(img.avg || 0).toFixed(2),
       group: filters.testGroup || '',
       n: img.n,
+      dateRange: `${filters.dateFrom || ''}..${filters.dateTo || ''}`,
+    });
+  }
+
+  for (const task of overview.image_task_work?.tasks || []) {
+    rows.push({
+      studyId: filters.studyId || '',
+      studyVersion: '',
+      moduleType: 'image_task_work',
+      questionId: String(task.task_id),
+      questionText: task.title || String(task.task_id),
+      metricType: task.type || 'image_task',
+      value: '',
+      count: task.total || 0,
+      timedOut: task.timed_out || 0,
+      group: filters.testGroup || '',
+      n: task.total || 0,
       dateRange: `${filters.dateFrom || ''}..${filters.dateTo || ''}`,
     });
   }

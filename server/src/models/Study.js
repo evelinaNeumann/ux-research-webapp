@@ -4,6 +4,33 @@ const studySchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     description: { type: String, default: '' },
+    image_rating_prompt: { type: String, default: '' },
+    image_rating_card_pool: { type: [String], default: [] },
+    image_rating_tasks: {
+      type: [
+        new mongoose.Schema(
+          {
+            task_id: { type: String, required: true },
+            type: {
+              type: String,
+              enum: ['image_impression', 'image_questions', 'image_compare', 'image_dislike_mark'],
+              required: true,
+            },
+            title: { type: String, default: '' },
+            description: { type: String, default: '' },
+            duration_sec: { type: Number, default: 5 },
+            image_ids: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ImageAsset' }],
+            cards: [{ type: String }],
+            max_select: { type: Number, default: 5 },
+            questions: [{ type: String }],
+            max_marks: { type: Number, default: 3 },
+            order_index: { type: Number, default: 0 },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
     profile_cards_source_study_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Study',

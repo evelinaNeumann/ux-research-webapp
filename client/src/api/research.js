@@ -7,6 +7,8 @@ export const researchApi = {
   getCardSortBySession: (sessionId) => http(`/cardsort/session/${sessionId}`),
   submitImageRating: (payload) => http('/image-rating', { method: 'POST', body: JSON.stringify(payload) }),
   getImageRatingsBySession: (sessionId) => http(`/image-rating/session/${sessionId}`),
+  submitImageTaskResponse: (payload) => http('/image-task-response', { method: 'POST', body: JSON.stringify(payload) }),
+  getImageTaskResponsesBySession: (sessionId) => http(`/image-task-response/session/${sessionId}`),
   submitTaskResponse: (payload) => http('/task-response', { method: 'POST', body: JSON.stringify(payload) }),
   getTaskResponsesBySession: (sessionId) => http(`/task-response/session/${sessionId}`),
 };

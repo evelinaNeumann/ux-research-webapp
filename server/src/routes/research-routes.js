@@ -3,9 +3,11 @@ import { requireAuth } from '../middleware/auth.js';
 import { Answer } from '../models/Answer.js';
 import { CardSort } from '../models/CardSort.js';
 import { ImageRating } from '../models/ImageRating.js';
+import { ImageTaskResponse } from '../models/ImageTaskResponse.js';
 import { ResearchTask } from '../models/ResearchTask.js';
 import { TaskResponse } from '../models/TaskResponse.js';
 import { Session } from '../models/Session.js';
+import { Study } from '../models/Study.js';
 import { badRequest, notFound, forbidden } from '../utils/errors.js';
 
 const router = Router();
@@ -143,6 +145,53 @@ router.get('/image-rating/session/:sessionId', async (req, res, next) => {
   try {
     await assertSessionOwnership(req.params.sessionId, req.auth);
     const items = await ImageRating.find({ session_id: req.params.sessionId });
+    res.json(items);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/image-task-response', async (req, res, next) => {
+  try {
+    const { session_id, task_id, task_type, payload, timed_out } = req.body;
+    if (!session_id || !task_id || !task_type) throw badRequest('session_id, task_id and task_type required');
+    const session = await assertSessionOwnership(session_id, req.auth);
+    assertWritableSession(session);
+    const study = await Study.findById(session.study_id, { image_rating_tasks: 1 });
+    if (!study) throw notFound('study not found');
+    const task = (study.image_rating_tasks || []).find((x) => String(x.task_id) === String(task_id));
+    if (!task) throw badRequest('image task not found');
+    if (String(task.type) !== String(task_type)) throw badRequest('invalid task type');
+
+    const now = new Date();
+    const item = await ImageTaskResponse.findOneAndUpdate(
+      { session_id, task_id: String(task_id) },
+      {
+        $set: {
+          session_id,
+          user_id: session.user_id,
+          study_id: session.study_id,
+          task_id: String(task_id),
+          task_type: String(task_type),
+          payload: payload || {},
+          timed_out: !!timed_out,
+          updated_at: now,
+        },
+        $setOnInsert: { created_at: now },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.status(201).json(item);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/image-task-response/session/:sessionId', async (req, res, next) => {
+  try {
+    await assertSessionOwnership(req.params.sessionId, req.auth);
+    const items = await ImageTaskResponse.find({ session_id: req.params.sessionId });
     res.json(items);
   } catch (err) {
     next(err);
