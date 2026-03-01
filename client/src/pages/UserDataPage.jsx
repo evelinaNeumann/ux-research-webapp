@@ -1,28 +1,59 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CardPanel } from '../components/CardPanel';
 import { authApi } from '../api/auth';
 import './UserDataPage.css';
 
-export function UserDataPage() {
-  const [form, setForm] = useState({ currentPassword: '', newPassword: '' });
+export function UserDataPage({ onAuth }) {
+  const [form, setForm] = useState({ username: '', currentPassword: '', newPassword: '' });
   const [show, setShow] = useState({ current: false, next: false });
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState('info');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const me = await authApi.me();
+        if (me?.authenticated && me?.user?.username) {
+          setForm((prev) => ({ ...prev, username: me.user.username }));
+        }
+      } catch {
+        // ignore initial preload errors
+      }
+    })();
+  }, []);
 
   const submit = async () => {
     setMessage('');
     try {
-      await authApi.changePassword(form);
-      setForm({ currentPassword: '', newPassword: '' });
-      setMessage('Passwort erfolgreich geändert.');
+      const payload = {
+        newUsername: form.username,
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+      };
+      const res = await authApi.changeUserData(payload);
+      setForm((prev) => ({ ...prev, currentPassword: '', newPassword: '' }));
+      setMessageType('success');
+      setMessage('Userdaten erfolgreich gespeichert.');
+      if (typeof onAuth === 'function' && res?.user) onAuth(res.user);
     } catch (err) {
+      setMessageType('error');
       setMessage(err.message);
     }
   };
 
   return (
     <div className="user-data-grid">
-      <CardPanel title="Passwort ändern">
-        <p className="hint">Hier kannst du dein Passwort ändern.</p>
+      <CardPanel title="Userdaten ändern">
+        <p className="hint">Hier kannst du deinen Nutzernamen und dein Passwort ändern.</p>
+
+        <label className="password-field">
+          <span>Nutzername</span>
+          <input
+            type="text"
+            value={form.username}
+            onChange={(e) => setForm({ ...form, username: e.target.value })}
+          />
+        </label>
 
         <label className="password-field">
           <span>Aktuelles Passwort</span>
@@ -52,8 +83,8 @@ export function UserDataPage() {
           </div>
         </label>
 
-        <button className="primary-btn" onClick={submit}>Passwort speichern</button>
-        {message && <small>{message}</small>}
+        <button className="primary-btn" onClick={submit}>Userdaten speichern</button>
+        {message && <small className={messageType === 'error' ? 'status-text error' : 'status-text success'}>{message}</small>}
       </CardPanel>
     </div>
   );

@@ -391,6 +391,42 @@ button.chip-item {
   color: #475569;
 }
 
+.task-head-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 0.6rem;
+}
+
+.task-head-left {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.task-head-left h4 {
+  margin: 0;
+}
+
+.task-switch-block {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: end;
+  text-align: right;
+}
+
+.task-switch-arrows {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.arrow-btn {
+  min-width: 32px;
+  height: 28px;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
 .task-file-render {
   display: grid;
   gap: 0.4rem;
@@ -417,6 +453,39 @@ button.chip-item {
   font-size: 0.95rem;
 }
 
+.task-step-heading {
+  display: grid;
+  gap: 0.2rem;
+  text-align: center;
+  justify-items: center;
+}
+
+.task-step-index-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.task-step-index {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.task-step-arrows {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.task-step-prompt {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.4;
+  color: #0f172a;
+  font-weight: 600;
+}
+
 .task-interactive-box small {
   color: #475569;
 }
@@ -433,12 +502,6 @@ button.chip-item {
   border-radius: 999px;
   padding: 0.2rem 0.55rem;
   font-size: 0.84rem;
-}
-
-.step-nav {
-  display: flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
 }
 
 .task-html-interactive {

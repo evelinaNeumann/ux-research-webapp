@@ -39,7 +39,7 @@ export function App({ user, setUser }) {
         <Route path="/session/:sessionId" element={<SessionPage />} />
         <Route path="/profile-setup/:studyId" element={<ProfileSetupPage />} />
         <Route path="/my-profile-data" element={<MyProfileDataPage />} />
-        <Route path="/user-data" element={<UserDataPage />} />
+        <Route path="/user-data" element={<UserDataPage onAuth={setUser} />} />
         <Route
           path="/admin/users"
           element={

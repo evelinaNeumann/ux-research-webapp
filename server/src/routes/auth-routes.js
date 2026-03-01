@@ -214,6 +214,49 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
   }
 });
 
+router.post('/change-user-data', requireAuth, async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword, newUsername } = req.body;
+    if (!currentPassword) throw badRequest('Gib dein aktuelles Passwort ein, um die Änderung zu bestätigen.');
+
+    const user = await User.findById(req.auth.sub);
+    if (!user) throw unauthorized();
+
+    const ok = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!ok) throw unauthorized('current password is invalid');
+
+    const nextUsername = String(newUsername || '').trim();
+    const wantsUsernameChange = !!nextUsername && nextUsername !== user.username;
+    const wantsPasswordChange = !!String(newPassword || '').trim();
+    if (!wantsUsernameChange && !wantsPasswordChange) {
+      throw badRequest('Keine Änderungen angegeben');
+    }
+
+    if (wantsUsernameChange) {
+      const exists = await User.findOne({ username: nextUsername, _id: { $ne: user._id } });
+      if (exists) throw badRequest('username exists');
+      user.username = nextUsername;
+    }
+
+    if (wantsPasswordChange) {
+      const passwordCandidate = String(newPassword || '');
+      if (!validatePassword(passwordCandidate, user.username)) throw badRequest(PASSWORD_POLICY_MESSAGE);
+      user.password_hash = await bcrypt.hash(passwordCandidate, 12);
+    }
+
+    await user.save();
+    const token = issueAuthCookie(res, user);
+
+    res.status(200).json({
+      message: 'user data updated',
+      user: { id: user._id, username: user.username, role: user.role },
+      accessToken: token,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/me', (req, res) => {
   const token = req.cookies?.token;
   if (!token) return res.status(200).json({ authenticated: false });

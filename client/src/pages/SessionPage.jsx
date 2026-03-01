@@ -42,13 +42,6 @@ function sanitizeInteractiveHtml(html) {
   return `${styleTag}<div class="task-html-root">${content}</div>`;
 }
 
-function normalizeTextForCompare(value) {
-  return String(value || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLocaleLowerCase('de-DE');
-}
-
 export function SessionPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -688,30 +681,6 @@ export function SessionPage() {
 
       {tasks.length > 0 && (
         <CardPanel>
-          <div className="session-topbar">
-            <div className="module-tabs">
-              <button
-                type="button"
-                className="ghost-btn"
-                disabled={safeTaskIndex <= 0}
-                onClick={() => setActiveTaskIndex((prev) => Math.max(0, prev - 1))}
-              >
-                Aufgabe zurück
-              </button>
-              <button
-                type="button"
-                className="ghost-btn"
-                disabled={safeTaskIndex >= tasks.length - 1}
-                onClick={() => setActiveTaskIndex((prev) => Math.min(tasks.length - 1, prev + 1))}
-              >
-                Aufgabe weiter
-              </button>
-            </div>
-            <small>
-              Aufgabe {safeTaskIndex + 1} von {tasks.length}
-            </small>
-          </div>
-
           {activeTask && (
             <div key={activeTask._id} className="task-view-item">
               {(() => {
@@ -725,10 +694,7 @@ export function SessionPage() {
                 const interactiveEnabled = interactiveIds.length > 0 && !!htmlFile?.path;
                 const taskId = String(activeTask._id);
                 const taskSteps = getTaskSteps(activeTask);
-                const firstStepText = taskSteps[0]?.prompt || '';
-                const showTaskDescription =
-                  !!String(activeTask.description || '').trim() &&
-                  normalizeTextForCompare(activeTask.description) !== normalizeTextForCompare(firstStepText);
+                const showTaskDescription = !!String(activeTask.description || '').trim();
                 const activeStepIdx = getActiveTaskStepIndex(activeTask);
                 const activeStep = taskSteps[activeStepIdx] || { prompt: '' };
                 const responseKey = `${taskId}:${activeStepIdx}`;
@@ -745,9 +711,40 @@ export function SessionPage() {
 
                 return (
                   <>
-              <h4>Aufgabe: {activeTask.title}</h4>
+              <div className="task-head-row">
+                <div className="task-head-left">
+                  <h4>
+                    Aufgabe {safeTaskIndex + 1} von {tasks.length}: {activeTask.title}
+                  </h4>
+                  <small>Status: {currentTaskComplete ? 'abgeschlossen' : 'in Bearbeitung'}</small>
+                </div>
+                <div className="task-switch-block">
+                  <small>
+                    Aufgaben {safeTaskIndex + 1} von {tasks.length} im Rahmen der Studie {study.name}
+                  </small>
+                  <div className="task-switch-arrows">
+                    <button
+                      type="button"
+                      className="ghost-btn arrow-btn"
+                      aria-label="Vorherige Aufgabe"
+                      disabled={safeTaskIndex <= 0}
+                      onClick={() => setActiveTaskIndex((prev) => Math.max(0, prev - 1))}
+                    >
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-btn arrow-btn"
+                      aria-label="Nächste Aufgabe"
+                      disabled={safeTaskIndex >= tasks.length - 1}
+                      onClick={() => setActiveTaskIndex((prev) => Math.min(tasks.length - 1, prev + 1))}
+                    >
+                      →
+                    </button>
+                  </div>
+                </div>
+              </div>
               {showTaskDescription && <p>Aufgabenbeschreibung: {activeTask.description}</p>}
-              <small>Status: {currentTaskComplete ? 'abgeschlossen' : 'in Bearbeitung'}</small>
               {files.map((file, idx) => (
                 <div key={`${activeTask._id}-file-${idx}`} className="task-file-render">
                   {file.format === 'pdf' && (
@@ -787,39 +784,43 @@ export function SessionPage() {
               ))}
               {interactiveEnabled && htmlFile?.path && (
                 <div className="task-interactive-box">
-                  <p>
-                    <strong>
-                      Schritt {activeStepIdx + 1}{taskSteps.length > 1 ? ` von ${taskSteps.length}` : ''}:
-                    </strong>{' '}
-                    {activeStep?.prompt || '-'}
-                  </p>
-                  {taskSteps.length > 1 && (
-                    <div className="step-nav">
-                      <button
-                        type="button"
-                        className="ghost-btn"
-                        disabled={activeStepIdx <= 0 || taskEnded}
-                        onClick={() =>
-                          setTaskActiveStepById((prev) => ({ ...prev, [taskId]: Math.max(0, activeStepIdx - 1) }))
-                        }
-                      >
-                        Schritt zurück
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-btn"
-                        disabled={activeStepIdx >= taskSteps.length - 1 || taskEnded}
-                        onClick={() =>
-                          setTaskActiveStepById((prev) => ({
-                            ...prev,
-                            [taskId]: Math.min(taskSteps.length - 1, activeStepIdx + 1),
-                          }))
-                        }
-                      >
-                        Schritt weiter
-                      </button>
+                  <div className="task-step-heading">
+                    <div className="task-step-index-row">
+                      <p className="task-step-index">
+                        Schritt {activeStepIdx + 1}{taskSteps.length > 1 ? ` von ${taskSteps.length}` : ''}
+                      </p>
+                      {taskSteps.length > 1 && (
+                        <div className="task-step-arrows">
+                          <button
+                            type="button"
+                            className="ghost-btn arrow-btn"
+                            aria-label="Vorheriger Schritt"
+                            disabled={activeStepIdx <= 0}
+                            onClick={() =>
+                              setTaskActiveStepById((prev) => ({ ...prev, [taskId]: Math.max(0, activeStepIdx - 1) }))
+                            }
+                          >
+                            ←
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-btn arrow-btn"
+                            aria-label="Nächster Schritt"
+                            disabled={activeStepIdx >= taskSteps.length - 1}
+                            onClick={() =>
+                              setTaskActiveStepById((prev) => ({
+                                ...prev,
+                                [taskId]: Math.min(taskSteps.length - 1, activeStepIdx + 1),
+                              }))
+                            }
+                          >
+                            →
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                    <p className="task-step-prompt">{activeStep?.prompt || '-'}</p>
+                  </div>
                   {activeStepLimitSec > 0 && !taskResult && !taskEnded && !isReadOnly && (
                     <p className="task-timer">
                       Zeit verbleibend: <strong>{remainingSec}s</strong>

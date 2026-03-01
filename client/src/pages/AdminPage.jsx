@@ -47,6 +47,8 @@ export function AdminPage() {
   const [taskUploadFiles, setTaskUploadFiles] = useState({});
   const [taskDragOverId, setTaskDragOverId] = useState('');
   const [taskStepDrag, setTaskStepDrag] = useState({ taskId: '', index: -1 });
+  const [taskAddStepOpenById, setTaskAddStepOpenById] = useState({});
+  const [taskAddStepFormById, setTaskAddStepFormById] = useState({});
   const [showClickableIdsByTask, setShowClickableIdsByTask] = useState({});
   const [taskMenuOpenId, setTaskMenuOpenId] = useState('');
   const [taskFileMenuOpenId, setTaskFileMenuOpenId] = useState('');
@@ -988,6 +990,12 @@ export function AdminPage() {
             const taskSteps = Array.isArray(t.steps)
               ? [...t.steps].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
               : [];
+            const addStepOpen = !!taskAddStepOpenById[t._id];
+            const addStepForm = taskAddStepFormById[t._id] || {
+              prompt: '',
+              correct_ids: '',
+              time_limit_sec: '',
+            };
             return (
               <div key={t._id} className="task-item">
                 <div className="task-menu-wrap">
@@ -1333,35 +1341,113 @@ export function AdminPage() {
                   <button
                     type="button"
                     className="ghost-btn"
-                    onClick={async () => {
-                      const prompt = window.prompt('Neue Aufgabenstellung');
-                      if (!prompt || !prompt.trim()) return;
-                      const correct = window.prompt('Richtige Antwort-IDs (Komma-getrennt)', '');
-                      if (correct === null) return;
-                      const limitRaw = window.prompt('Zeitlimit in Sekunden (0 = kein Limit)', '0');
-                      if (limitRaw === null) return;
-                      const nextLimit =
-                        Number.isFinite(Number(limitRaw)) && Number(limitRaw) > 0
-                          ? Math.floor(Number(limitRaw))
-                          : 0;
-                      const nextSteps = [
-                        ...taskSteps,
-                        {
-                          prompt: prompt.trim(),
-                          order_index: taskSteps.length,
-                          correct_ids: correct.split(',').map((x) => x.trim()).filter(Boolean),
-                          time_limit_sec: nextLimit,
-                        },
-                      ];
-                      await adminApi.updateTask(t._id, {
-                        steps: nextSteps,
-                      });
-                      await loadContent(selectedStudy);
-                      showSuccess('Aufgabenstellung hinzugefügt.');
+                    onClick={() => {
+                      setTaskAddStepOpenById((prev) => ({ ...prev, [t._id]: !prev[t._id] }));
+                      if (!taskAddStepFormById[t._id]) {
+                        setTaskAddStepFormById((prev) => ({
+                          ...prev,
+                          [t._id]: { prompt: '', correct_ids: '', time_limit_sec: '' },
+                        }));
+                      }
                     }}
                   >
-                    Aufgabenstellung hinzufügen
+                    {addStepOpen ? 'Aufgabenstellung schließen' : 'Aufgabenstellung hinzufügen'}
                   </button>
+                  {addStepOpen && (
+                    <div className="task-add-step-inline">
+                      <label className="form-field task-description-field">
+                        <span>Neue Aufgabenstellung</span>
+                        <textarea
+                          rows={3}
+                          value={addStepForm.prompt}
+                          onChange={(e) =>
+                            setTaskAddStepFormById((prev) => ({
+                              ...prev,
+                              [t._id]: { ...addStepForm, prompt: e.target.value },
+                            }))
+                          }
+                          placeholder="Konkrete Aufgabenanweisung"
+                        />
+                      </label>
+                      <FormField
+                        label="Richtige Antwort-IDs (Komma-getrennt)"
+                        value={addStepForm.correct_ids}
+                        onChange={(e) =>
+                          setTaskAddStepFormById((prev) => ({
+                            ...prev,
+                            [t._id]: { ...addStepForm, correct_ids: e.target.value },
+                          }))
+                        }
+                      />
+                      <FormField
+                        label="Zeitlimit pro Aufgabenschritt (Sekunden, optional)"
+                        value={addStepForm.time_limit_sec}
+                        onChange={(e) =>
+                          setTaskAddStepFormById((prev) => ({
+                            ...prev,
+                            [t._id]: { ...addStepForm, time_limit_sec: e.target.value },
+                          }))
+                        }
+                      />
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="primary-btn"
+                          onClick={async () => {
+                            try {
+                              const prompt = String(addStepForm.prompt || '').trim();
+                              if (!prompt) {
+                                showError('Bitte Aufgabenstellung eingeben.');
+                                return;
+                              }
+                              const nextLimit =
+                                Number.isFinite(Number(addStepForm.time_limit_sec)) &&
+                                Number(addStepForm.time_limit_sec) > 0
+                                  ? Math.floor(Number(addStepForm.time_limit_sec))
+                                  : 0;
+                              const nextSteps = [
+                                ...taskSteps,
+                                {
+                                  prompt,
+                                  order_index: taskSteps.length,
+                                  correct_ids: String(addStepForm.correct_ids || '')
+                                    .split(',')
+                                    .map((x) => x.trim())
+                                    .filter(Boolean),
+                                  time_limit_sec: nextLimit,
+                                },
+                              ];
+                              await adminApi.updateTask(t._id, { steps: nextSteps });
+                              await loadContent(selectedStudy);
+                              setTaskAddStepOpenById((prev) => ({ ...prev, [t._id]: false }));
+                              setTaskAddStepFormById((prev) => ({
+                                ...prev,
+                                [t._id]: { prompt: '', correct_ids: '', time_limit_sec: '' },
+                              }));
+                              showSuccess('Aufgabenstellung hinzugefügt.');
+                            } catch (err) {
+                              showError(err.message || 'Aufgabenstellung konnte nicht hinzugefügt werden.');
+                            }
+                          }}
+                        >
+                          Aufgabenstellung speichern
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          onClick={() => {
+                            setTaskAddStepOpenById((prev) => ({ ...prev, [t._id]: false }));
+                            setTaskAddStepFormById((prev) => ({
+                              ...prev,
+                              [t._id]: { prompt: '', correct_ids: '', time_limit_sec: '' },
+                            }));
+                          }}
+                        >
+                          Abbrechen
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {Array.isArray(t.config?.interactive?.selectable_ids) &&
                   t.config.interactive.selectable_ids.length > 0 && (
