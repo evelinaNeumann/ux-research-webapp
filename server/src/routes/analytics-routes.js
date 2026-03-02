@@ -4,6 +4,7 @@ import { analyticsOverview, flattenExport } from '../services/analytics-service.
 import { toCsv } from '../utils/csv.js';
 import { UserStudyProfile } from '../models/UserStudyProfile.js';
 import { Study } from '../models/Study.js';
+import { getCurrentPrivacyPolicy } from '../services/privacy-policy-service.js';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin'));
@@ -99,7 +100,10 @@ function toPdfEntries(report) {
     push('Keine Profile für den gewählten Filter vorhanden.', { size: 10 });
   } else {
     report.items.forEach((item, idx) => {
-      push(`${idx + 1}. Nutzer: ${item.username}`, { bold: true, size: 11 });
+      push(
+        `${idx + 1}. ${item.participant_label || `Teilnehmer ${idx + 1}`}`,
+        { bold: true, size: 11 }
+      );
       push(`Alter: ${item.age_range || '-'}`, { size: 10, indent: 16 });
       push(`Rolle: ${roleLabel(item.role_category, item.role_custom)}`, { size: 10, indent: 16 });
       push(`Wichtige Wörter: ${(item.key_points || []).join(', ') || '-'}`, { size: 10, indent: 16, wrap: true });
@@ -807,7 +811,6 @@ function roleLabel(roleCategory, roleCustom) {
 async function loadPortraitInsights(studyId, filters = {}) {
   const study = await Study.findById(studyId, { name: 1 });
   const profiles = await UserStudyProfile.find({ study_id: studyId })
-    .populate('user_id', 'username')
     .sort({ completed_at: -1 });
 
   const filteredProfiles = profiles.filter((p) => {
@@ -824,7 +827,7 @@ async function loadPortraitInsights(studyId, filters = {}) {
   const roleDist = {};
   const keywordDist = {};
 
-  const items = filteredProfiles.map((p) => {
+  const items = filteredProfiles.map((p, idx) => {
     const ageRange = p.age_range || '';
     const roleCategory = p.role_category || '';
     const roleCustom = p.role_custom || '';
@@ -838,8 +841,7 @@ async function loadPortraitInsights(studyId, filters = {}) {
     }
 
     return {
-      user_id: p.user_id?._id || null,
-      username: p.user_id?.username || 'unbekannt',
+      participant_label: `Teilnehmer ${idx + 1}`,
       age_range: ageRange,
       role_category: roleCategory,
       role_custom: roleCustom,
@@ -1025,6 +1027,23 @@ router.get('/compare/users', async (req, res) => {
 router.get('/compare/studies', async (req, res) => {
   const studyIds = String(req.query.studyIds || '').split(',').filter(Boolean);
   res.json({ studyIds, message: 'Comparison endpoint scaffold ready' });
+});
+
+router.get('/privacy-policy/export', async (req, res) => {
+  const format = String(req.query.format || 'txt').toLowerCase();
+  const policy = await getCurrentPrivacyPolicy();
+  if (format === 'json') {
+    res.setHeader('Content-Disposition', 'attachment; filename="datenschutzerklaerung.json"');
+    return res.json({
+      version: policy.version,
+      date: policy.date,
+      revision: policy.revision,
+      text: policy.text,
+    });
+  }
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="datenschutzerklaerung.txt"');
+  return res.status(200).send(policy.text);
 });
 
 router.get('/export', async (req, res, next) => {

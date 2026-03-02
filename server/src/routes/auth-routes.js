@@ -8,6 +8,10 @@ import { StudyAssignment } from '../models/StudyAssignment.js';
 import { env } from '../config/env.js';
 import { requireAuth } from '../middleware/auth.js';
 import { badRequest, unauthorized } from '../utils/errors.js';
+import {
+  hasAcceptedPrivacy,
+} from '../constants/privacy.js';
+import { getCurrentPrivacyPolicy } from '../services/privacy-policy-service.js';
 
 const router = Router();
 
@@ -46,6 +50,25 @@ function issueAuthCookie(res, user) {
   return token;
 }
 
+function toAuthUser(user, policy) {
+  const requiredRevision = Number(policy?.revision || 1);
+  return {
+    id: String(user._id),
+    username: user.username,
+    role: user.role,
+    requires_privacy_consent: user.role === 'user' && !hasAcceptedPrivacy(user, requiredRevision),
+    privacy_policy_version_acknowledged: user.privacy_notice_version_acknowledged || '',
+    privacy_notice_acknowledged_at: user.privacy_notice_acknowledged_at || null,
+    study_data_consent_version: user.study_data_consent_version || '',
+    study_data_consent_at: user.study_data_consent_at || null,
+    privacy_policy_revision_acknowledged: Number(user.privacy_policy_revision_acknowledged || 0),
+    study_data_consent_revision_acknowledged: Number(user.study_data_consent_revision_acknowledged || 0),
+    privacy_policy_version_current: String(policy?.version || ''),
+    privacy_policy_date_current: String(policy?.date || ''),
+    privacy_policy_revision_current: requiredRevision,
+  };
+}
+
 router.post('/register', async (req, res, next) => {
   try {
     const { username, password } = req.body;
@@ -80,8 +103,9 @@ router.post('/register', async (req, res, next) => {
       );
     }
     const token = issueAuthCookie(res, user);
+    const policy = await getCurrentPrivacyPolicy();
 
-    res.status(201).json({ id: user._id, username: user.username, role: user.role, accessToken: token });
+    res.status(201).json({ user: toAuthUser(user, policy), accessToken: token });
   } catch (err) {
     next(err);
   }
@@ -124,8 +148,9 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     if (!ok) throw unauthorized('invalid credentials');
 
     const token = issueAuthCookie(res, user);
+    const policy = await getCurrentPrivacyPolicy();
 
-    res.json({ accessToken: token, role: user.role, username: user.username });
+    res.json({ accessToken: token, user: toAuthUser(user, policy) });
   } catch (err) {
     next(err);
   }
@@ -193,6 +218,44 @@ router.post('/logout', (_req, res) => {
   res.status(204).send();
 });
 
+router.get('/privacy-policy', async (_req, res, next) => {
+  try {
+    const policy = await getCurrentPrivacyPolicy();
+    res.json(policy);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/privacy-consent', requireAuth, async (req, res, next) => {
+  try {
+    const acceptedPrivacy = !!req.body?.accepted_privacy_notice;
+    const acceptedStudyConsent = !!req.body?.accepted_study_data_consent;
+    if (!acceptedPrivacy || !acceptedStudyConsent) {
+      throw badRequest('both privacy acknowledgements are required');
+    }
+    const user = await User.findById(req.auth.sub);
+    if (!user) throw unauthorized();
+    if (user.role !== 'user') throw badRequest('privacy consent flow applies only to users');
+
+    const policy = await getCurrentPrivacyPolicy();
+    user.privacy_notice_version_acknowledged = String(policy.version || '');
+    user.privacy_notice_acknowledged_at = new Date();
+    user.privacy_policy_revision_acknowledged = Number(policy.revision || 1);
+    user.study_data_consent_version = String(policy.version || '');
+    user.study_data_consent_at = new Date();
+    user.study_data_consent_revision_acknowledged = Number(policy.revision || 1);
+    await user.save();
+
+    return res.json({
+      message: 'privacy consent stored',
+      user: toAuthUser(user, policy),
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 router.post('/change-password', requireAuth, async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -246,10 +309,11 @@ router.post('/change-user-data', requireAuth, async (req, res, next) => {
 
     await user.save();
     const token = issueAuthCookie(res, user);
+    const policy = await getCurrentPrivacyPolicy();
 
     res.status(200).json({
       message: 'user data updated',
-      user: { id: user._id, username: user.username, role: user.role },
+      user: toAuthUser(user, policy),
       accessToken: token,
     });
   } catch (err) {
@@ -263,7 +327,13 @@ router.get('/me', (req, res) => {
 
   try {
     const payload = jwt.verify(token, env.jwtSecret);
-    return res.json({ authenticated: true, user: payload });
+    return User.findById(payload.sub)
+      .then(async (user) => {
+        if (!user) return res.status(200).json({ authenticated: false });
+        const policy = await getCurrentPrivacyPolicy();
+        return res.json({ authenticated: true, user: toAuthUser(user, policy) });
+      })
+      .catch(() => res.status(200).json({ authenticated: false }));
   } catch {
     return res.status(200).json({ authenticated: false });
   }

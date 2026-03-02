@@ -6,6 +6,7 @@ import './AdminUsersPage.css';
 export function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [profilesByUser, setProfilesByUser] = useState({});
+  const [sessionsByUser, setSessionsByUser] = useState({});
   const [openUserId, setOpenUserId] = useState('');
   const [error, setError] = useState('');
   const handlingResetPromptsRef = useRef(false);
@@ -52,6 +53,11 @@ export function AdminUsersPage() {
     setProfilesByUser((prev) => ({ ...prev, [userId]: items || [] }));
   };
 
+  const loadSessions = async (userId) => {
+    const items = await adminApi.listUserSessions(userId);
+    setSessionsByUser((prev) => ({ ...prev, [userId]: items || [] }));
+  };
+
   return (
     <div className="admin-users-shell">
       <CardPanel title="Benutzer & Rollen">
@@ -72,7 +78,7 @@ export function AdminUsersPage() {
                       setOpenUserId('');
                       return;
                     }
-                    await loadProfiles(u._id);
+                    await Promise.all([loadProfiles(u._id), loadSessions(u._id)]);
                     setOpenUserId(u._id);
                   }}
                 >
@@ -150,6 +156,36 @@ export function AdminUsersPage() {
                     >
                       Profil bearbeiten
                     </button>
+                  </div>
+                ))}
+
+                <hr />
+                <h4>Nutzer-Sessions</h4>
+                {(sessionsByUser[u._id] || []).length === 0 && <small>Keine Sessions vorhanden.</small>}
+                {(sessionsByUser[u._id] || []).map((s) => (
+                  <div key={s._id} className="profile-row">
+                    <div>
+                      <strong>{s.study_id?.name || 'Studie'}</strong>
+                      <small>Status: {s.status}</small>
+                      <small>Gestartet: {s.started_at ? new Date(s.started_at).toLocaleString('de-DE') : '-'}</small>
+                      <small>Beendet: {s.completed_at ? new Date(s.completed_at).toLocaleString('de-DE') : '-'}</small>
+                    </div>
+                    {s.status === 'in_progress' && (
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        onClick={async () => {
+                          try {
+                            await adminApi.completeSessionAsAdmin(s._id);
+                            await loadSessions(u._id);
+                          } catch (err) {
+                            setError(err.message);
+                          }
+                        }}
+                      >
+                        Teilnahme abschließen (Admin)
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

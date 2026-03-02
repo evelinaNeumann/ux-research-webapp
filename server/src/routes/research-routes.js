@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requirePrivacyConsent } from '../middleware/auth.js';
 import { Answer } from '../models/Answer.js';
 import { CardSort } from '../models/CardSort.js';
 import { ImageRating } from '../models/ImageRating.js';
@@ -11,7 +11,7 @@ import { Study } from '../models/Study.js';
 import { badRequest, notFound, forbidden } from '../utils/errors.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requirePrivacyConsent);
 
 function normalizeAnswerId(value) {
   let id = String(value || '').trim();

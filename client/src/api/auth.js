@@ -9,6 +9,9 @@ export const authApi = {
     http('/auth/reset-password-with-username', { method: 'POST', body: JSON.stringify(payload) }),
   changePassword: (payload) => http('/auth/change-password', { method: 'POST', body: JSON.stringify(payload) }),
   changeUserData: (payload) => http('/auth/change-user-data', { method: 'POST', body: JSON.stringify(payload) }),
+  privacyPolicy: () => http('/auth/privacy-policy'),
+  submitPrivacyConsent: (payload) =>
+    http('/auth/privacy-consent', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => http('/auth/logout', { method: 'POST' }),
   me: () => http('/auth/me'),
 };

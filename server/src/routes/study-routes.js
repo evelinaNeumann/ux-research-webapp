@@ -8,12 +8,13 @@ import { ImageAsset } from '../models/ImageAsset.js';
 import { StudyProfileCard } from '../models/StudyProfileCard.js';
 import { ResearchTask } from '../models/ResearchTask.js';
 import { uploadStudyPdf } from '../middleware/upload-study-pdf.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePrivacyConsent, requireRole } from '../middleware/auth.js';
 import { getPagination } from '../middleware/pagination.js';
 import { notFound, badRequest } from '../utils/errors.js';
 import { hasStudyAccessForUser } from '../utils/study-access.js';
 
 const router = Router();
+router.use(requireAuth, requirePrivacyConsent);
 
 function moduleOrderForStudyType(type) {
   if (type === 'questionnaire') return ['questionnaire'];
@@ -63,7 +64,7 @@ async function validateProfileInheritanceConfig({
   };
 }
 
-router.get('/', requireAuth, async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req.query);
     let query = {};
@@ -92,7 +93,7 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/:id', requireAuth, async (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const study = await assertStudyAccess(req.params.id, req.auth);
     res.json(study);
@@ -101,7 +102,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/:id/questions', requireAuth, async (req, res, next) => {
+router.get('/:id/questions', async (req, res, next) => {
   try {
     await assertStudyAccess(req.params.id, req.auth);
     const items = await Question.find({ study_id: req.params.id }).sort({ _id: 1 });
@@ -111,7 +112,7 @@ router.get('/:id/questions', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/:id/cards', requireAuth, async (req, res, next) => {
+router.get('/:id/cards', async (req, res, next) => {
   try {
     await assertStudyAccess(req.params.id, req.auth);
     const items = await Card.find({ study_id: req.params.id }).sort({ _id: 1 });
@@ -121,7 +122,7 @@ router.get('/:id/cards', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/:id/card-sort-columns', requireAuth, async (req, res, next) => {
+router.get('/:id/card-sort-columns', async (req, res, next) => {
   try {
     await assertStudyAccess(req.params.id, req.auth);
     const items = await CardSortColumn.find({ study_id: req.params.id, is_active: true }).sort({ order_index: 1 });
@@ -131,7 +132,7 @@ router.get('/:id/card-sort-columns', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/:id/images', requireAuth, async (req, res, next) => {
+router.get('/:id/images', async (req, res, next) => {
   try {
     await assertStudyAccess(req.params.id, req.auth);
     const items = await ImageAsset.find({ study_id: req.params.id }).sort({ uploaded_at: 1 });
@@ -141,7 +142,7 @@ router.get('/:id/images', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/:id/tasks', requireAuth, async (req, res, next) => {
+router.get('/:id/tasks', async (req, res, next) => {
   try {
     await assertStudyAccess(req.params.id, req.auth);
     const items = await ResearchTask.find({ study_id: req.params.id }).sort({ order_index: 1, _id: 1 });
@@ -151,7 +152,7 @@ router.get('/:id/tasks', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/:id/profile-cards', requireAuth, async (req, res, next) => {
+router.get('/:id/profile-cards', async (req, res, next) => {
   try {
     await assertStudyAccess(req.params.id, req.auth);
     const items = await StudyProfileCard.find({ study_id: req.params.id, is_active: true }).sort({ order_index: 1 });
@@ -161,7 +162,7 @@ router.get('/:id/profile-cards', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/', requireAuth, requireRole('admin'), async (req, res, next) => {
+router.post('/', requireRole('admin'), async (req, res, next) => {
   try {
     const {
       name,
@@ -203,7 +204,7 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res, next) => {
   }
 });
 
-router.put('/:id', requireAuth, requireRole('admin'), async (req, res, next) => {
+router.put('/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const {
       name,
@@ -273,7 +274,7 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res, next) => 
   }
 });
 
-router.post('/:id/profile-cards/import', requireAuth, requireRole('admin'), async (req, res, next) => {
+router.post('/:id/profile-cards/import', requireRole('admin'), async (req, res, next) => {
   try {
     const { source_study_id, inherit_user_profile_points } = req.body;
     if (!source_study_id) throw badRequest('source_study_id required');
@@ -316,7 +317,7 @@ router.post('/:id/profile-cards/import', requireAuth, requireRole('admin'), asyn
   }
 });
 
-router.post('/:id/brief-pdf', requireAuth, requireRole('admin'), uploadStudyPdf.single('file'), async (req, res, next) => {
+router.post('/:id/brief-pdf', requireRole('admin'), uploadStudyPdf.single('file'), async (req, res, next) => {
   try {
     if (!req.file) throw badRequest('pdf file required');
     const study = await Study.findById(req.params.id);
@@ -332,7 +333,7 @@ router.post('/:id/brief-pdf', requireAuth, requireRole('admin'), uploadStudyPdf.
   }
 });
 
-router.delete('/:id', requireAuth, requireRole('admin'), async (req, res, next) => {
+router.delete('/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const deleted = await Study.findByIdAndDelete(req.params.id);
     if (!deleted) throw notFound('study not found');

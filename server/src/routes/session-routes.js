@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requirePrivacyConsent } from '../middleware/auth.js';
 import { Session } from '../models/Session.js';
 import { Study } from '../models/Study.js';
 import { UserStudyProfile } from '../models/UserStudyProfile.js';
@@ -19,7 +19,7 @@ import { notFound, forbidden, badRequest } from '../utils/errors.js';
 import { hasStudyAccessForUser } from '../utils/study-access.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requirePrivacyConsent);
 
 function defaultModulesForStudy(study) {
   const type = String(study?.type || 'mixed');

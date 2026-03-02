@@ -3,6 +3,11 @@ import { http } from './http';
 export const adminApi = {
   listUsers: () => http('/admin/users'),
   listUserProfiles: (userId) => http(`/admin/users/${userId}/profiles`),
+  listUserSessions: (userId) => http(`/admin/users/${userId}/sessions`),
+  completeSessionAsAdmin: (sessionId) => http(`/sessions/${sessionId}/complete`, { method: 'PUT' }),
+  getPrivacyPolicy: () => http('/admin/privacy-policy'),
+  updatePrivacyPolicy: (payload) =>
+    http('/admin/privacy-policy', { method: 'PUT', body: JSON.stringify(payload) }),
   updateUserProfile: (userId, studyId, payload) =>
     http(`/admin/users/${userId}/profiles/${studyId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   setUserRole: (userId, role) =>

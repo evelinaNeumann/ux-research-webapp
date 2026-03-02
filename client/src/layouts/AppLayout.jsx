@@ -21,6 +21,7 @@ export function AppLayout({ user }) {
           <Link to="/my-profile-data">Meine Profil Data</Link>
           <Link to="/user-data">Userdaten ändern</Link>
           {user?.role === 'admin' && <Link to="/admin">Admin</Link>}
+          <Link to="/privacy-consent">Datenschutz</Link>
         </nav>
         <button onClick={logout} className="ghost-btn">Logout</button>
       </aside>

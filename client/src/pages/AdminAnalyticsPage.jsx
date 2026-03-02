@@ -32,7 +32,6 @@ export function AdminAnalyticsPage() {
   const [reportBold, setReportBold] = useState(false);
   const [reportItalic, setReportItalic] = useState(false);
   const [reportIncludePortraits, setReportIncludePortraits] = useState(true);
-  const [reportUsernameOverrides, setReportUsernameOverrides] = useState({});
   const [reportIncludeCharts, setReportIncludeCharts] = useState({
     interview: true,
     card_sort: true,
@@ -76,10 +75,6 @@ export function AdminAnalyticsPage() {
       }
     })();
   }, [selectedStudy, portraitFilters.age, portraitFilters.role, portraitFilters.keyword]);
-
-  useEffect(() => {
-    setReportUsernameOverrides({});
-  }, [selectedStudy]);
 
   const selectedStudyName = useMemo(
     () => studies.find((s) => s._id === selectedStudy)?.name || 'Keine Studie',
@@ -191,12 +186,7 @@ export function AdminAnalyticsPage() {
   }, [filteredPortraitItems]);
 
   const filteredProfileCount = filteredPortraitItems.length;
-  const getPortraitKey = (item) => String(item?.user_id || item?.username || '');
-  const getDisplayUsername = (item) => {
-    const key = getPortraitKey(item);
-    const override = String(reportUsernameOverrides[key] || '').trim();
-    return override || item?.username || '-';
-  };
+  const getParticipantLabel = (item, idx = 0) => item?.participant_label || `Teilnehmer ${idx + 1}`;
   const renderDistributionBars = (rows, labelFn) => {
     if (!rows?.length) return <p>Keine Daten für den gewählten Filter.</p>;
     const max = Math.max(...rows.map((r) => r.count), 1);
@@ -238,6 +228,7 @@ export function AdminAnalyticsPage() {
       </div>
     );
   };
+
   const renderPieChart = (rows, labelFn, emptyText = 'Keine Daten vorhanden.') => {
     if (!rows?.length) return <p>{emptyText}</p>;
     const total = rows.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
@@ -456,6 +447,12 @@ export function AdminAnalyticsPage() {
             >
               JSON Export
             </button>
+            <button
+              className="ghost-btn"
+              onClick={() => window.open('http://localhost:4000/analytics/privacy-policy/export?format=txt', '_blank')}
+            >
+              Datenschutzerklaerung Export
+            </button>
           </div>
         </div>
         {error && <p className="error-text">{error}</p>}
@@ -594,9 +591,9 @@ export function AdminAnalyticsPage() {
               </div>
               {filteredPortraitItems.length === 0 && <p>Keine Profildaten für den gewählten Filter.</p>}
               <div className="portrait-grid">
-                {filteredPortraitItems.map((u) => (
-                  <article key={`${u.user_id || u.username}`} className="portrait-card">
-                    <h4>{getDisplayUsername(u)}</h4>
+                {filteredPortraitItems.map((u, idx) => (
+                  <article key={`portrait-${idx}-${u.completed_at || 'na'}`} className="portrait-card">
+                    <h4>{getParticipantLabel(u, idx)}</h4>
                     <small>Alter: {u.age_range || '-'}</small>
                     <small>Rolle: {roleLabel(u.role_category, u.role_custom)}</small>
                     <div className="tag-wrap">
@@ -682,31 +679,6 @@ export function AdminAnalyticsPage() {
             <label><input type="checkbox" checked={reportIncludeCharts.task_work} onChange={(e) => setReportIncludeCharts((p) => ({ ...p, task_work: e.target.checked }))} /> Aufgaben-Diagramme</label>
           </div>
 
-          {filteredPortraitItems.length > 0 && (
-            <div className="report-name-editor-list">
-              <p className="hint">Nutzernamen in der Auswertungs-Vorschau anpassen</p>
-              {filteredPortraitItems.map((u) => {
-                const key = getPortraitKey(u);
-                return (
-                  <label key={`report-name-edit-${key}`} className="form-field">
-                    <span>{u.username}</span>
-                    <input
-                      type="text"
-                      value={reportUsernameOverrides[key] ?? ''}
-                      placeholder={u.username}
-                      onChange={(e) =>
-                        setReportUsernameOverrides((prev) => ({
-                          ...prev,
-                          [key]: e.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                );
-              })}
-            </div>
-          )}
-
           <label className="form-field">
             <span>Report-Text (frei editierbar, Zeilen können gelöscht werden)</span>
             <textarea
@@ -740,14 +712,14 @@ export function AdminAnalyticsPage() {
                   {filteredPortraitItems.length > 0 ? (
                     <>
                       <div className="portrait-grid report-portrait-grid">
-                        {filteredPortraitItems.map((u) => (
-                          <article key={`report-portrait-${u.user_id || u.username}`} className="portrait-card">
-                            <h4>{getDisplayUsername(u)}</h4>
+                        {filteredPortraitItems.map((u, idx) => (
+                          <article key={`report-portrait-${idx}-${u.completed_at || 'na'}`} className="portrait-card">
+                            <h4>{getParticipantLabel(u, idx)}</h4>
                             <small>Alter: {u.age_range || '-'}</small>
                             <small>Rolle: {roleLabel(u.role_category, u.role_custom)}</small>
                             <div className="tag-wrap">
                               {(u.key_points || []).map((point) => (
-                                <span key={`${getPortraitKey(u)}-${point}`} className="tag-chip">{point}</span>
+                                <span key={`report-portrait-point-${idx}-${point}`} className="tag-chip">{point}</span>
                               ))}
                             </div>
                           </article>

@@ -11,6 +11,7 @@ import { PageTreeNode } from '../models/PageTreeNode.js';
 import { ResearchTask } from '../models/ResearchTask.js';
 import { Study } from '../models/Study.js';
 import { User } from '../models/User.js';
+import { Session } from '../models/Session.js';
 import { StudyAssignment } from '../models/StudyAssignment.js';
 import { StudyProfileCard } from '../models/StudyProfileCard.js';
 import { CardSortColumn } from '../models/CardSortColumn.js';
@@ -21,6 +22,7 @@ import {
 } from '../models/UserStudyProfile.js';
 import { uploadTaskFile } from '../middleware/upload-task-file.js';
 import { badRequest, notFound } from '../utils/errors.js';
+import { getCurrentPrivacyPolicy, updatePrivacyPolicy } from '../services/privacy-policy-service.js';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin'));
@@ -239,6 +241,44 @@ router.get('/users/:userId/profiles', async (req, res, next) => {
     .populate('study_id', 'name type version')
     .sort({ completed_at: -1 });
   res.json(items);
+});
+
+router.get('/users/:userId/sessions', async (req, res, next) => {
+  const user = await User.findById(req.params.userId);
+  if (!user) return next(notFound('user not found'));
+
+  const items = await Session.find({ user_id: req.params.userId })
+    .populate('study_id', 'name type')
+    .sort({ createdAt: -1 });
+  res.json(items);
+});
+
+router.get('/privacy-policy', async (_req, res, next) => {
+  try {
+    const policy = await getCurrentPrivacyPolicy();
+    res.json(policy);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/privacy-policy', async (req, res, next) => {
+  try {
+    const payload = req.body || {};
+    if (payload.text !== undefined && !String(payload.text || '').trim()) {
+      return next(badRequest('privacy policy text must not be empty'));
+    }
+    if (payload.privacy_ack_label !== undefined && !String(payload.privacy_ack_label || '').trim()) {
+      return next(badRequest('privacy acknowledgement label must not be empty'));
+    }
+    if (payload.study_consent_label !== undefined && !String(payload.study_consent_label || '').trim()) {
+      return next(badRequest('study consent label must not be empty'));
+    }
+    const updated = await updatePrivacyPolicy(payload, req.auth.sub);
+    return res.json(updated);
+  } catch (err) {
+    return next(err);
+  }
 });
 
 router.put('/users/:userId/profiles/:studyId', async (req, res, next) => {

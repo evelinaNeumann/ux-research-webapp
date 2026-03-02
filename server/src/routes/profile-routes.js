@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requirePrivacyConsent } from '../middleware/auth.js';
 import {
   UserStudyProfile,
   USER_PROFILE_AGE_RANGES,
@@ -11,7 +11,7 @@ import { badRequest, notFound, forbidden } from '../utils/errors.js';
 import { hasStudyAccessForUser } from '../utils/study-access.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requirePrivacyConsent);
 
 async function findLatestDemographicsProfile(userId) {
   return UserStudyProfile.findOne({

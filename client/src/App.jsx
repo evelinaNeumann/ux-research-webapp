@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppLayout } from './layouts/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -10,6 +10,7 @@ import { AdminUsersPage } from './pages/AdminUsersPage';
 import { AdminAnalyticsPage } from './pages/AdminAnalyticsPage';
 import { ProfileSetupPage } from './pages/ProfileSetupPage';
 import { MyProfileDataPage } from './pages/MyProfileDataPage';
+import { PrivacyConsentPage } from './pages/PrivacyConsentPage';
 
 function Protected({ user, children }) {
   if (!user) return <Navigate to="/login" replace />;
@@ -22,16 +23,35 @@ function AdminOnly({ user, children }) {
   return children;
 }
 
+function ConsentRequired({ user, children }) {
+  const location = useLocation();
+  const needsConsent = user?.role === 'user' && !!user?.requires_privacy_consent;
+  if (needsConsent && location.pathname !== '/privacy-consent') {
+    return <Navigate to="/privacy-consent" replace />;
+  }
+  return children;
+}
+
 export function App({ user, setUser }) {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage onAuth={setUser} />} />
       <Route path="/register" element={<RegisterPage onAuth={setUser} />} />
+      <Route
+        path="/privacy-consent"
+        element={
+          <Protected user={user}>
+            <PrivacyConsentPage user={user} onAuth={setUser} />
+          </Protected>
+        }
+      />
 
       <Route
         element={
           <Protected user={user}>
-            <AppLayout user={user} />
+            <ConsentRequired user={user}>
+              <AppLayout user={user} />
+            </ConsentRequired>
           </Protected>
         }
       >
@@ -66,7 +86,15 @@ export function App({ user, setUser }) {
         />
       </Route>
 
-      <Route path="*" element={<Navigate to={user ? '/' : '/login'} replace />} />
+      <Route
+        path="*"
+        element={
+          <Navigate
+            to={user ? (user.role === 'user' && user.requires_privacy_consent ? '/privacy-consent' : '/') : '/login'}
+            replace
+          />
+        }
+      />
     </Routes>
   );
 }

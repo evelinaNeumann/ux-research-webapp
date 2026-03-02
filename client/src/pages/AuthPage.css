@@ -80,3 +80,68 @@
 .reset-box h4 {
   margin: 0;
 }
+
+.consent-card {
+  width: min(760px, 94vw);
+}
+
+.privacy-text-box {
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  background: #f8fafc;
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.7rem;
+}
+
+.privacy-text-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: #111827;
+}
+
+.consent-check-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem;
+  align-items: start;
+}
+
+.consent-check-row input {
+  margin-top: 0.2rem;
+}
+
+.policy-editor-wrap {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.policy-editor-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.policy-field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.policy-field span {
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.policy-field input,
+.policy-field textarea {
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.95rem;
+}
+
+.policy-textarea {
+  min-height: 260px;
+}
