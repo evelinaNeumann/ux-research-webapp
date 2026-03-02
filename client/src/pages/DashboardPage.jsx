@@ -161,17 +161,14 @@ export function DashboardPage({ user }) {
 
   const startSession = async (studyId) => {
     try {
-      await profileApi.getStudyProfile(studyId);
-    } catch {
-      navigate(`/profile-setup/${studyId}`);
-      return;
-    }
-
-    try {
       const session = await sessionApi.start(studyId);
       await load();
       navigate(`/session/${session._id}`);
     } catch (err) {
+      if (String(err?.message || '').toLowerCase().includes('profile setup required')) {
+        navigate(`/profile-setup/${studyId}`);
+        return;
+      }
       setError(err.message);
     }
   };

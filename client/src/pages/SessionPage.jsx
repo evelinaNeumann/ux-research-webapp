@@ -10,7 +10,7 @@ import './SessionPage.css';
 const MODULE_LABELS = {
   questionnaire: 'Interview',
   card_sort: 'Card Sorting',
-  image_rating: 'Bildbewertung',
+  image_rating: 'Bildmodul',
 };
 
 function defaultModulesForStudy(study) {
@@ -419,6 +419,8 @@ export function SessionPage() {
   const imageRatingTasks = Array.isArray(study?.image_rating_tasks)
     ? [...study.image_rating_tasks].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
     : [];
+  const imageModuleLabel = imageRatingTasks.length > 0 ? 'Bild-Aufgaben' : 'Bildbewertung';
+  const moduleLabels = { ...MODULE_LABELS, image_rating: imageModuleLabel };
   const imagesById = Object.fromEntries((images || []).map((img) => [String(img._id), img]));
 
   useEffect(() => {
@@ -786,7 +788,7 @@ export function SessionPage() {
                 className={m === activeModule ? 'tab active' : 'tab'}
                 onClick={() => setActiveModule(m)}
               >
-                {MODULE_LABELS[m] || m}
+                {moduleLabels[m] || m}
               </button>
             ))}
           </div>
@@ -1216,7 +1218,7 @@ export function SessionPage() {
       )}
 
       {modules.includes('image_rating') && activeModule === 'image_rating' && (
-        <CardPanel title={isReadOnly ? 'Bildbewertung ansehen' : 'Bildbewertung bearbeiten'}>
+        <CardPanel title={isReadOnly ? `${imageModuleLabel} ansehen` : `${imageModuleLabel} bearbeiten`}>
           {imageRatingPrompt && <p className="hint-text">{imageRatingPrompt}</p>}
           {imageRatingTasks.length > 0 ? (
             <div className="image-task-user-list">
@@ -1394,29 +1396,9 @@ export function SessionPage() {
                           ))}
                         </div>
                         <div className="image-fields">
-                          <small>Markiere bis zu {Number(task.max_marks || 3) || 3} Bereiche, die dir nicht gefallen.</small>
-                          <label className="form-row inline-check">
-                            <input
-                              type="checkbox"
-                              checked={!!response.liked_all}
-                              disabled={isReadOnly}
-                              onChange={(e) => {
-                                const likedAll = !!e.target.checked;
-                                setImageTaskResponses((prev) => ({
-                                  ...prev,
-                                  [taskId]: {
-                                    payload: {
-                                      ...response,
-                                      liked_all: likedAll,
-                                      marks: likedAll ? [] : Array.isArray(response.marks) ? response.marks : [],
-                                    },
-                                    timed_out: !!prev[taskId]?.timed_out,
-                                  },
-                                }));
-                              }}
-                            />
-                            <span>Alles gefällt</span>
-                          </label>
+                          <small>
+                            Markiere bis zu {Number(task.max_marks || 3) || 3} Bereiche, die dir nicht gefallen (nutze Icons per Drag and Drop).
+                          </small>
                           {!isReadOnly && (
                             <div className="mark-palette">
                               {Array.from({
@@ -1438,6 +1420,29 @@ export function SessionPage() {
                               ))}
                             </div>
                           )}
+                          <small>Oder mache einen Haken, wenn dir alles gefällt:</small>
+                          <label className="form-row inline-check">
+                            <input
+                              type="checkbox"
+                              checked={!!response.liked_all}
+                              disabled={isReadOnly}
+                              onChange={(e) => {
+                                const likedAll = !!e.target.checked;
+                                setImageTaskResponses((prev) => ({
+                                  ...prev,
+                                  [taskId]: {
+                                    payload: {
+                                      ...response,
+                                      liked_all: likedAll,
+                                      marks: likedAll ? [] : Array.isArray(response.marks) ? response.marks : [],
+                                    },
+                                    timed_out: !!prev[taskId]?.timed_out,
+                                  },
+                                }));
+                              }}
+                            />
+                            <span>Mir gefällt alles</span>
+                          </label>
                         </div>
                       </div>
                     )}

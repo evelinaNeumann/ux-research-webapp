@@ -38,6 +38,8 @@ const studySchema = new mongoose.Schema(
     },
     inherit_profile_cards: { type: Boolean, default: false },
     inherit_user_profile_points: { type: Boolean, default: false },
+    ask_demographics_again: { type: Boolean, default: false },
+    ask_key_points_again: { type: Boolean, default: false },
     type: {
       type: String,
       enum: ['questionnaire', 'card_sort', 'image_rating', 'task_work', 'mixed'],

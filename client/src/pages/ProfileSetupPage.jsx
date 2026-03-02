@@ -20,6 +20,8 @@ export function ProfileSetupPage() {
   const [cards, setCards] = useState([]);
   const [message, setMessage] = useState('');
   const [prefillInfo, setPrefillInfo] = useState('');
+  const [demographicsInfo, setDemographicsInfo] = useState('');
+  const [demographicsLocked, setDemographicsLocked] = useState(false);
   const [form, setForm] = useState({
     age_range: '',
     role_category: 'schueler_azubi_student',
@@ -38,6 +40,20 @@ export function ProfileSetupPage() {
         setAgeRanges(opts.age_ranges || []);
         setCards(profileCards || []);
         const prefillPoints = Array.isArray(prefill?.key_points) ? prefill.key_points : [];
+        const prefillDemographics = prefill?.demographics || null;
+        const shouldLockDemographics = !prefill?.ask_demographics_again && !!prefillDemographics;
+        if (prefillDemographics) {
+          setForm((prev) => ({
+            ...prev,
+            age_range: prefillDemographics.age_range || prev.age_range,
+            role_category: prefillDemographics.role_category || prev.role_category,
+            role_custom: prefillDemographics.role_custom || '',
+          }));
+        }
+        setDemographicsLocked(shouldLockDemographics);
+        setDemographicsInfo(
+          shouldLockDemographics ? 'Alter und Rolle wurden aus deinem vorhandenen Profil übernommen.' : ''
+        );
         if (prefillPoints.length === 4) {
           const sourceName = prefill.source_study_name || 'anderer Studie';
           setForm((prev) => ({ ...prev, key_points: prefillPoints }));
@@ -101,7 +117,11 @@ export function ProfileSetupPage() {
 
         <label className="form-field">
           <span>Alter im Range</span>
-          <select value={form.age_range} onChange={(e) => setForm({ ...form, age_range: e.target.value })}>
+          <select
+            value={form.age_range}
+            disabled={demographicsLocked}
+            onChange={(e) => setForm({ ...form, age_range: e.target.value })}
+          >
             <option value="">Bitte wählen</option>
             {ageRanges.map((r) => (
               <option key={r} value={r}>{r}</option>
@@ -113,6 +133,7 @@ export function ProfileSetupPage() {
           <span>Rolle auswählen</span>
           <select
             value={form.role_category}
+            disabled={demographicsLocked}
             onChange={(e) => setForm({ ...form, role_category: e.target.value })}
           >
             {ROLE_OPTIONS.map((r) => (
@@ -126,11 +147,13 @@ export function ProfileSetupPage() {
             <span>Eigene Rolle</span>
             <input
               value={form.role_custom}
+              disabled={demographicsLocked}
               onChange={(e) => setForm({ ...form, role_custom: e.target.value })}
               placeholder="Eigene Eingabe"
             />
           </label>
         )}
+        {demographicsInfo && <small className="subtext prefill-info">{demographicsInfo}</small>}
 
         {cards.length > 0 && (
           <div>

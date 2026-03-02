@@ -174,6 +174,8 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res, next) => {
       profile_cards_source_study_id,
       inherit_profile_cards,
       inherit_user_profile_points,
+      ask_demographics_again,
+      ask_key_points_again,
     } = req.body;
     if (!name) throw badRequest('name required');
     const inheritance = await validateProfileInheritanceConfig({
@@ -192,6 +194,8 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res, next) => {
       profile_cards_source_study_id: inheritance.sourceId,
       inherit_profile_cards: inheritance.inheritProfileCards,
       inherit_user_profile_points: inheritance.inheritUserPoints,
+      ask_demographics_again: !!ask_demographics_again,
+      ask_key_points_again: !!ask_key_points_again,
     });
     res.status(201).json(study);
   } catch (err) {
@@ -213,6 +217,8 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res, next) => 
       profile_cards_source_study_id,
       inherit_profile_cards,
       inherit_user_profile_points,
+      ask_demographics_again,
+      ask_key_points_again,
     } = req.body;
     const study = await Study.findById(req.params.id);
     if (!study) throw notFound('study not found');
@@ -233,6 +239,8 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res, next) => 
       }
     }
     if (is_active !== undefined) study.is_active = is_active;
+    if (ask_demographics_again !== undefined) study.ask_demographics_again = !!ask_demographics_again;
+    if (ask_key_points_again !== undefined) study.ask_key_points_again = !!ask_key_points_again;
     if (module_order !== undefined) study.module_order = module_order;
     if (
       profile_cards_source_study_id !== undefined ||

@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { Session } from '../models/Session.js';
 import { Study } from '../models/Study.js';
 import { UserStudyProfile } from '../models/UserStudyProfile.js';
+import { StudyProfileCard } from '../models/StudyProfileCard.js';
 import { Question } from '../models/Question.js';
 import { Answer } from '../models/Answer.js';
 import { Card } from '../models/Card.js';
@@ -29,6 +30,91 @@ function defaultModulesForStudy(study) {
   return ['questionnaire', 'card_sort', 'image_rating'];
 }
 
+async function resolveProfileForSessionStart(study, userId) {
+  const cards = await StudyProfileCard.find({ study_id: study._id, is_active: true }, { label: 1 });
+  const cardLabels = cards.map((card) => String(card.label || '').trim()).filter(Boolean);
+  const hasProfileWords = cardLabels.length > 0;
+  let inheritedKeyPoints = [];
+  if (hasProfileWords && !study.ask_key_points_again) {
+    const allowed = new Set(cardLabels);
+    if (study.profile_cards_source_study_id) {
+      const sourceProfile = await UserStudyProfile.findOne(
+        { user_id: userId, study_id: study.profile_cards_source_study_id },
+        { key_points: 1 }
+      );
+      if (sourceProfile) {
+        inheritedKeyPoints = (sourceProfile.key_points || []).filter((point) => allowed.has(point)).slice(0, 4);
+      }
+    }
+    if (inheritedKeyPoints.length !== 4) {
+      const latestWithKeyPoints = await UserStudyProfile.findOne(
+        { user_id: userId, key_points: { $exists: true, $ne: [] } },
+        { key_points: 1 }
+      ).sort({ completed_at: -1, _id: -1 });
+      if (latestWithKeyPoints) {
+        inheritedKeyPoints = (latestWithKeyPoints.key_points || [])
+          .filter((point) => allowed.has(point))
+          .slice(0, 4);
+      }
+    }
+  }
+
+  let profile = await UserStudyProfile.findOne({ study_id: study._id, user_id: userId });
+  const latestProfile = !study.ask_demographics_again
+    ? await UserStudyProfile.findOne({
+        user_id: userId,
+        age_range: { $exists: true, $ne: '' },
+        role_category: { $exists: true, $ne: '' },
+      }).sort({ completed_at: -1, _id: -1 })
+    : null;
+
+  if (profile) {
+    const patch = {};
+    if ((!profile.age_range || !profile.role_category) && latestProfile) {
+      patch.age_range = latestProfile.age_range;
+      patch.role_category = latestProfile.role_category;
+      patch.role_custom =
+        latestProfile.role_category === 'other' ? String(latestProfile.role_custom || '').trim() : '';
+    }
+    if (
+      hasProfileWords &&
+      inheritedKeyPoints.length === 4 &&
+      (!Array.isArray(profile.key_points) || profile.key_points.length !== 4)
+    ) {
+      patch.key_points = inheritedKeyPoints;
+    }
+    if (Object.keys(patch).length > 0) {
+      patch.completed_at = new Date();
+      profile = await UserStudyProfile.findOneAndUpdate({ study_id: study._id, user_id: userId }, patch, { new: true });
+    }
+    return { profile, profileCardCount: cardLabels.length };
+  }
+
+  if (!latestProfile) return { profile: null, profileCardCount: cardLabels.length };
+
+  profile = await UserStudyProfile.findOneAndUpdate(
+    { study_id: study._id, user_id: userId },
+    {
+      user_id: userId,
+      study_id: study._id,
+      age_range: latestProfile.age_range,
+      role_category: latestProfile.role_category,
+      role_custom: latestProfile.role_category === 'other' ? String(latestProfile.role_custom || '').trim() : '',
+      key_points: inheritedKeyPoints.length === 4 ? inheritedKeyPoints : [],
+      completed_at: new Date(),
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  return { profile, profileCardCount: cardLabels.length };
+}
+
+function isCompleteProfileForSession(profile, profileCardCount) {
+  const hasDemographics = !!profile?.age_range && !!profile?.role_category;
+  if (!hasDemographics) return false;
+  if (!profileCardCount) return true;
+  return Array.isArray(profile?.key_points) && profile.key_points.length === 4;
+}
+
 router.post('/', async (req, res, next) => {
   try {
     const { study_id } = req.body;
@@ -40,11 +126,8 @@ router.post('/', async (req, res, next) => {
       const hasAccess = await hasStudyAccessForUser(study, req.auth.sub);
       if (!hasAccess) throw forbidden('study not assigned to user');
 
-      const profile = await UserStudyProfile.findOne({
-        study_id,
-        user_id: req.auth.sub,
-      });
-      if (!profile) throw badRequest('profile setup required');
+      const { profile, profileCardCount } = await resolveProfileForSessionStart(study, req.auth.sub);
+      if (!isCompleteProfileForSession(profile, profileCardCount)) throw badRequest('profile setup required');
     }
 
     const existing = await Session.findOne({ user_id: req.auth.sub, study_id, status: 'in_progress' }).sort({ createdAt: -1 });

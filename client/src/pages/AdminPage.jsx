@@ -20,6 +20,8 @@ export function AdminPage() {
     profile_cards_source_study_id: '',
     inherit_profile_cards: false,
     inherit_user_profile_points: false,
+    ask_demographics_again: false,
+    ask_key_points_again: false,
   });
   const [studyEditForm, setStudyEditForm] = useState({
     name: '',
@@ -29,6 +31,8 @@ export function AdminPage() {
     profile_cards_source_study_id: '',
     inherit_profile_cards: false,
     inherit_user_profile_points: false,
+    ask_demographics_again: false,
+    ask_key_points_again: false,
   });
   const [briefFile, setBriefFile] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -155,6 +159,8 @@ export function AdminPage() {
         profile_cards_source_study_id: '',
         inherit_profile_cards: false,
         inherit_user_profile_points: false,
+        ask_demographics_again: false,
+        ask_key_points_again: false,
       });
       setBriefFile(null);
       return;
@@ -168,6 +174,8 @@ export function AdminPage() {
       profile_cards_source_study_id: selectedStudyData.profile_cards_source_study_id || '',
       inherit_profile_cards: !!selectedStudyData.inherit_profile_cards,
       inherit_user_profile_points: !!selectedStudyData.inherit_user_profile_points,
+      ask_demographics_again: !!selectedStudyData.ask_demographics_again,
+      ask_key_points_again: !!selectedStudyData.ask_key_points_again,
     });
     setImageRatingPrompt(selectedStudyData.image_rating_prompt || '');
     setImageUploadFiles([]);
@@ -312,6 +320,22 @@ export function AdminPage() {
                   }
                 />
               </label>
+              <label className="form-field checkbox-field">
+                <span>Alter und Rolle pro Studie neu abfragen</span>
+                <input
+                  type="checkbox"
+                  checked={studyForm.ask_demographics_again}
+                  onChange={(e) => setStudyForm({ ...studyForm, ask_demographics_again: e.target.checked })}
+                />
+              </label>
+              <label className="form-field checkbox-field">
+                <span>Wichtige Wörter pro Studie neu abfragen</span>
+                <input
+                  type="checkbox"
+                  checked={studyForm.ask_key_points_again}
+                  onChange={(e) => setStudyForm({ ...studyForm, ask_key_points_again: e.target.checked })}
+                />
+              </label>
               <button
                 className="primary-btn"
                 onClick={async () => {
@@ -323,6 +347,8 @@ export function AdminPage() {
                       profile_cards_source_study_id: studyForm.profile_cards_source_study_id || undefined,
                       inherit_profile_cards: studyForm.inherit_profile_cards,
                       inherit_user_profile_points: studyForm.inherit_user_profile_points,
+                      ask_demographics_again: studyForm.ask_demographics_again,
+                      ask_key_points_again: studyForm.ask_key_points_again,
                     };
                     const created = await studyApi.create(payload);
                     if (studyForm.inherit_profile_cards && studyForm.profile_cards_source_study_id) {
@@ -340,6 +366,8 @@ export function AdminPage() {
                       profile_cards_source_study_id: '',
                       inherit_profile_cards: false,
                       inherit_user_profile_points: false,
+                      ask_demographics_again: false,
+                      ask_key_points_again: false,
                     });
                     if (!list.some((s) => s._id === created._id)) {
                       await loadContent(created._id);
@@ -452,6 +480,26 @@ export function AdminPage() {
                   checked={studyEditForm.inherit_user_profile_points}
                   onChange={(e) =>
                     setStudyEditForm({ ...studyEditForm, inherit_user_profile_points: e.target.checked })
+                  }
+                />
+              </label>
+              <label className="form-field checkbox-field">
+                <span>Alter und Rolle pro Studie neu abfragen</span>
+                <input
+                  type="checkbox"
+                  checked={studyEditForm.ask_demographics_again}
+                  onChange={(e) =>
+                    setStudyEditForm({ ...studyEditForm, ask_demographics_again: e.target.checked })
+                  }
+                />
+              </label>
+              <label className="form-field checkbox-field">
+                <span>Wichtige Wörter pro Studie neu abfragen</span>
+                <input
+                  type="checkbox"
+                  checked={studyEditForm.ask_key_points_again}
+                  onChange={(e) =>
+                    setStudyEditForm({ ...studyEditForm, ask_key_points_again: e.target.checked })
                   }
                 />
               </label>
