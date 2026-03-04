@@ -43,7 +43,7 @@ function issueAuthCookie(res, user) {
   res.cookie('token', token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: false,
+    secure: process.env.NODE_ENV === 'production',
     maxAge: 8 * 60 * 60 * 1000,
   });
 

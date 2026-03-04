@@ -1,0 +1,53 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: uxapp-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+
+  server:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    container_name: uxapp-server
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGO_URI: ${MONGO_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN}
+      ADMIN_BOOTSTRAP_KEY: ${ADMIN_BOOTSTRAP_KEY}
+    volumes:
+      - uploads_data:/app/uploads
+      - uploads_data:/app/server/uploads
+
+  web:
+    build:
+      context: ../client
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: /api
+    container_name: uxapp-web
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  mongo_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:

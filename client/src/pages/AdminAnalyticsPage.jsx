@@ -431,25 +431,25 @@ export function AdminAnalyticsPage() {
           <div className="analytics-actions">
             <button
               className="primary-btn"
-              onClick={() => window.open(`http://localhost:4000/analytics/export?format=csv&studyId=${selectedStudy}`, '_blank')}
+              onClick={() => window.open(`${API_BASE}/analytics/export?format=csv&studyId=${selectedStudy}`, '_blank')}
             >
               CSV Export
             </button>
             <button
               className="ghost-btn"
-              onClick={() => window.open(`http://localhost:4000/analytics/export?format=pdf&studyId=${selectedStudy}`, '_blank')}
+              onClick={() => window.open(`${API_BASE}/analytics/export?format=pdf&studyId=${selectedStudy}`, '_blank')}
             >
               PDF Export
             </button>
             <button
               className="ghost-btn"
-              onClick={() => window.open(`http://localhost:4000/analytics/export?format=json&studyId=${selectedStudy}`, '_blank')}
+              onClick={() => window.open(`${API_BASE}/analytics/export?format=json&studyId=${selectedStudy}`, '_blank')}
             >
               JSON Export
             </button>
             <button
               className="ghost-btn"
-              onClick={() => window.open('http://localhost:4000/analytics/privacy-policy/export?format=txt', '_blank')}
+              onClick={() => window.open(`${API_BASE}/analytics/privacy-policy/export?format=txt`, '_blank')}
             >
               Datenschutzerklaerung Export
             </button>
@@ -568,7 +568,7 @@ export function AdminAnalyticsPage() {
                     className="primary-btn"
                     onClick={() =>
                       window.open(
-                        `http://localhost:4000/analytics/study/${selectedStudy}/user-portraits/export?format=pdf${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
+                        `${API_BASE}/analytics/study/${selectedStudy}/user-portraits/export?format=pdf${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
                         '_blank'
                       )
                     }
@@ -580,7 +580,7 @@ export function AdminAnalyticsPage() {
                     className="ghost-btn"
                     onClick={() =>
                       window.open(
-                        `http://localhost:4000/analytics/study/${selectedStudy}/user-portraits/export?format=json${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
+                        `${API_BASE}/analytics/study/${selectedStudy}/user-portraits/export?format=json${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
                         '_blank'
                       )
                     }
@@ -904,7 +904,7 @@ export function AdminAnalyticsPage() {
                     className="primary-btn"
                     onClick={() =>
                       window.open(
-                        `http://localhost:4000/analytics/study/${selectedStudy}/modules/export?format=pdf${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
+                        `${API_BASE}/analytics/study/${selectedStudy}/modules/export?format=pdf${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
                         '_blank'
                       )
                     }
@@ -916,7 +916,7 @@ export function AdminAnalyticsPage() {
                     className="ghost-btn"
                     onClick={() =>
                       window.open(
-                        `http://localhost:4000/analytics/study/${selectedStudy}/modules/export?format=json${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
+                        `${API_BASE}/analytics/study/${selectedStudy}/modules/export?format=json${portraitExportQuery ? `&${portraitExportQuery}` : ''}`,
                         '_blank'
                       )
                     }

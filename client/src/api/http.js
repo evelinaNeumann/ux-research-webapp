@@ -1,4 +1,5 @@
-export const API_BASE = 'http://localhost:4000';
+const envBase = (import.meta.env.VITE_API_BASE || '').trim();
+export const API_BASE = envBase || 'http://localhost:4000';
 
 export async function http(path, options = {}) {
   const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
