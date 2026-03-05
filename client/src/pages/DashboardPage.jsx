@@ -190,9 +190,10 @@ export function DashboardPage({ user }) {
       navigate(`/session/${existing._id}`);
       return;
     }
+    const profileReady = await ensureProfileReady(studyId);
+    if (!profileReady) return;
+
     if (existing?.status === 'in_progress') {
-      const profileReady = await ensureProfileReady(studyId);
-      if (!profileReady) return;
       navigate(`/session/${existing._id}`);
       return;
     }
