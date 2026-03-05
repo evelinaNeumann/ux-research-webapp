@@ -39,7 +39,8 @@
 .admin-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
 }
 
 .content-config-layout {
@@ -110,7 +111,30 @@
 .checkbox-field input {
   width: 18px;
   height: 18px;
-  margin-top: 0.35rem;
+  margin: 0;
+  justify-self: end;
+  align-self: center;
+}
+
+.checkbox-field {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  background: #fff;
+}
+
+.checkbox-field span {
+  min-height: 2.2em;
+}
+
+.admin-grid > .form-field {
+  min-width: 0;
+}
+
+.admin-grid > .form-field select,
+.admin-grid > .form-field input,
+.admin-grid > .form-field textarea {
+  width: 100%;
 }
 
 .pdf-upload-block {
