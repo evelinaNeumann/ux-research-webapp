@@ -200,7 +200,7 @@ export function DashboardPage({ user }) {
     const profileReady = await ensureProfileReady(studyId);
     if (!profileReady) return;
     const study = studies.find((s) => String(s._id) === String(studyId));
-    const hasBriefingPdf = user?.role === 'user' && !!study?.brief_pdf_path;
+    const hasBriefingPdf = user?.role === 'user' && !existing && !!study?.brief_pdf_path;
     if (hasBriefingPdf) {
       setBriefingState({
         open: true,

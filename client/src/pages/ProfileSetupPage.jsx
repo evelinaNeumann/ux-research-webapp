@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CardPanel } from '../components/CardPanel';
+import { API_BASE } from '../api/http';
 import { profileApi } from '../api/profile';
 import { studyApi } from '../api/studies';
 import { sessionApi } from '../api/sessions';
@@ -18,7 +19,10 @@ export function ProfileSetupPage() {
   const navigate = useNavigate();
   const [ageRanges, setAgeRanges] = useState([]);
   const [cards, setCards] = useState([]);
+  const [study, setStudy] = useState(null);
   const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [showBriefing, setShowBriefing] = useState(false);
   const [prefillInfo, setPrefillInfo] = useState('');
   const [demographicsInfo, setDemographicsInfo] = useState('');
   const [demographicsLocked, setDemographicsLocked] = useState(false);
@@ -32,13 +36,15 @@ export function ProfileSetupPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [opts, profileCards, prefill] = await Promise.all([
+        const [opts, profileCards, prefill, studyRes] = await Promise.all([
           profileApi.options(),
           studyApi.getProfileCards(studyId),
           profileApi.getStudyPrefill(studyId),
+          studyApi.getById(studyId),
         ]);
         setAgeRanges(opts.age_ranges || []);
         setCards(profileCards || []);
+        setStudy(studyRes || null);
         const prefillPoints = Array.isArray(prefill?.key_points) ? prefill.key_points : [];
         const prefillDemographics = prefill?.demographics || null;
         const shouldLockDemographics = !prefill?.ask_demographics_again && !!prefillDemographics;
@@ -103,10 +109,28 @@ export function ProfileSetupPage() {
         ...form,
         key_points: hasProfileWords ? form.key_points : [],
       });
+      if (study?.brief_pdf_path) {
+        setShowBriefing(true);
+        return;
+      }
       const session = await sessionApi.start(studyId);
       navigate(`/session/${session._id}`);
     } catch (err) {
       setMessage(err.message);
+    }
+  };
+
+  const continueAfterBriefing = async () => {
+    try {
+      setSaving(true);
+      setMessage('');
+      const session = await sessionApi.start(studyId);
+      setShowBriefing(false);
+      navigate(`/session/${session._id}`);
+    } catch (err) {
+      setMessage(err.message || 'Studie konnte nicht gestartet werden.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -181,6 +205,28 @@ export function ProfileSetupPage() {
         <button className="primary-btn" onClick={saveAndStart}>Speichern und Studie starten</button>
         {message && <p className="error-text">{message}</p>}
       </CardPanel>
+
+      {showBriefing && study?.brief_pdf_path && (
+        <div className="profile-briefing-overlay" role="dialog" aria-modal="true">
+          <div className="profile-briefing-modal">
+            <h3>Studienbriefing: {study.name}</h3>
+            <p className="hint">Bitte lies zuerst das Briefing. Danach kannst du mit der Studie starten.</p>
+            <iframe
+              className="profile-briefing-frame"
+              title={`Briefing ${study.name}`}
+              src={`${API_BASE}${study.brief_pdf_path}`}
+            />
+            <div className="profile-briefing-actions">
+              <button type="button" className="ghost-btn" onClick={() => setShowBriefing(false)} disabled={saving}>
+                Abbrechen
+              </button>
+              <button type="button" className="primary-btn" onClick={continueAfterBriefing} disabled={saving}>
+                {saving ? 'Bitte warten...' : 'Briefing gelesen, Studie starten'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

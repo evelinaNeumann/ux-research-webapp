@@ -436,8 +436,11 @@ export function SessionPage() {
     setMessage('');
     try {
       await persistQuestionnaire();
-      setMessage('Interview gespeichert.');
-      setMessageType('success');
+      const autoCompleted = await tryAutoCompleteAfterSave();
+      if (!autoCompleted) {
+        setMessage('Interview gespeichert.');
+        setMessageType('success');
+      }
     } catch (err) {
       setMessage(err.message);
       setMessageType('error');
@@ -449,8 +452,11 @@ export function SessionPage() {
     setMessage('');
     try {
       await persistCardSort();
-      setMessage('Card Sorting gespeichert.');
-      setMessageType('success');
+      const autoCompleted = await tryAutoCompleteAfterSave();
+      if (!autoCompleted) {
+        setMessage('Card Sorting gespeichert.');
+        setMessageType('success');
+      }
     } catch (err) {
       setMessage(err.message);
       setMessageType('error');
@@ -478,11 +484,39 @@ export function SessionPage() {
       } else {
         await persistImageRatings();
       }
-      setMessage('Bildbewertungen gespeichert.');
-      setMessageType('success');
+      const autoCompleted = await tryAutoCompleteAfterSave();
+      if (!autoCompleted) {
+        setMessage('Bildbewertungen gespeichert.');
+        setMessageType('success');
+      }
     } catch (err) {
       setMessage(err.message);
       setMessageType('error');
+    }
+  };
+
+  const shouldIgnoreAutoCompleteError = (text) => {
+    const msg = String(text || '').toLowerCase();
+    return (
+      msg.includes('bitte zuerst') ||
+      msg.includes('fehlen') ||
+      msg.includes('required') ||
+      msg.includes('card-sorting') ||
+      msg.includes('bildbewertung') ||
+      msg.includes('bild-aufgabe') ||
+      msg.includes('interaktiven aufgaben')
+    );
+  };
+
+  const tryAutoCompleteAfterSave = async () => {
+    if (!session || isReadOnly) return false;
+    try {
+      await sessionApi.complete(session._id);
+      navigate('/');
+      return true;
+    } catch (err) {
+      if (shouldIgnoreAutoCompleteError(err?.message)) return false;
+      throw err;
     }
   };
 
