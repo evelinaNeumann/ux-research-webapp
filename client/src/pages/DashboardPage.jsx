@@ -4,6 +4,7 @@ import { studyApi } from '../api/studies';
 import { sessionApi } from '../api/sessions';
 import { profileApi } from '../api/profile';
 import { researchApi } from '../api/research';
+import { API_BASE } from '../api/http';
 import { CardPanel } from '../components/CardPanel';
 import './DashboardPage.css';
 
@@ -31,6 +32,12 @@ export function DashboardPage({ user }) {
   const [sessionMeta, setSessionMeta] = useState({});
   const [missingProfiles, setMissingProfiles] = useState([]);
   const [error, setError] = useState('');
+  const [briefingState, setBriefingState] = useState({
+    open: false,
+    study: null,
+    resumeSessionId: '',
+  });
+  const [briefingLoading, setBriefingLoading] = useState(false);
 
   const latestSessionByStudy = sessions.reduce((acc, s) => {
     const key = String(s.study_id);
@@ -192,12 +199,39 @@ export function DashboardPage({ user }) {
     }
     const profileReady = await ensureProfileReady(studyId);
     if (!profileReady) return;
+    const study = studies.find((s) => String(s._id) === String(studyId));
+    const hasBriefingPdf = user?.role === 'user' && !!study?.brief_pdf_path;
+    if (hasBriefingPdf) {
+      setBriefingState({
+        open: true,
+        study,
+        resumeSessionId: existing?.status === 'in_progress' ? existing._id : '',
+      });
+      return;
+    }
 
     if (existing?.status === 'in_progress') {
       navigate(`/session/${existing._id}`);
       return;
     }
     await startSession(studyId);
+  };
+
+  const continueAfterBriefing = async () => {
+    const studyId = briefingState.study?._id;
+    if (!studyId) return;
+    try {
+      setBriefingLoading(true);
+      if (briefingState.resumeSessionId) {
+        setBriefingState({ open: false, study: null, resumeSessionId: '' });
+        navigate(`/session/${briefingState.resumeSessionId}`);
+        return;
+      }
+      setBriefingState({ open: false, study: null, resumeSessionId: '' });
+      await startSession(studyId);
+    } finally {
+      setBriefingLoading(false);
+    }
   };
 
   return (
@@ -267,6 +301,37 @@ export function DashboardPage({ user }) {
           </div>
         ))}
       </CardPanel>
+
+      {briefingState.open && briefingState.study && (
+        <div className="briefing-overlay" role="dialog" aria-modal="true">
+          <div className="briefing-modal">
+            <h3>Studienbriefing: {briefingState.study.name}</h3>
+            <p className="hint">Bitte lies zuerst das Briefing. Danach kannst du mit der Studie starten.</p>
+            <iframe
+              className="briefing-frame"
+              title={`Briefing ${briefingState.study.name}`}
+              src={`${API_BASE}${briefingState.study.brief_pdf_path}`}
+            />
+            <div className="briefing-actions">
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => setBriefingState({ open: false, study: null, resumeSessionId: '' })}
+                disabled={briefingLoading}
+              >
+                Abbrechen
+              </button>
+              <button type="button" className="primary-btn" onClick={continueAfterBriefing} disabled={briefingLoading}>
+                {briefingLoading
+                  ? 'Bitte warten...'
+                  : briefingState.resumeSessionId
+                    ? 'Weiter zur Studie'
+                    : 'Briefing gelesen, Studie starten'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

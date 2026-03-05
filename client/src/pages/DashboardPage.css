@@ -32,3 +32,49 @@
   margin: 0 0 0.6rem;
   color: #6b7280;
 }
+
+.briefing-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  z-index: 1200;
+}
+
+.briefing-modal {
+  width: min(980px, 96vw);
+  max-height: 92vh;
+  background: #fff;
+  border: 1px solid #d8dce7;
+  border-radius: 14px;
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.briefing-modal h3 {
+  margin: 0;
+}
+
+.briefing-frame {
+  width: 100%;
+  min-height: min(68vh, 640px);
+  border: 1px solid #d8dce7;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.briefing-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 700px) {
+  .briefing-frame {
+    min-height: 56vh;
+  }
+}
