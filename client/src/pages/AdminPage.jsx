@@ -646,6 +646,22 @@ export function AdminPage() {
                 Zur Studie zuweisen
               </button>
               <button
+                className="danger-btn"
+                onClick={async () => {
+                  try {
+                    if (!selectedAssignmentStudy || !selectedUserForAssign) return;
+                    await adminApi.removeAssignment(selectedAssignmentStudy, selectedUserForAssign);
+                    const assigned = await adminApi.listAssignments(selectedAssignmentStudy);
+                    setAssignments(assigned || []);
+                    showSuccess('Zuweisung für ausgewählten Benutzer entfernt.');
+                  } catch (err) {
+                    showError(err.message || 'Entzug fehlgeschlagen.');
+                  }
+                }}
+              >
+                Ausgewählte Zuweisung entziehen
+              </button>
+              <button
                 className="ghost-btn"
                 onClick={async () => {
                   try {
