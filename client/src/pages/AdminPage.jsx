@@ -620,10 +620,12 @@ export function AdminPage() {
                 </select>
               </label>
               <label className="form-field">
-                <span>Nutzer</span>
+                <span>Benutzer</span>
                 <select value={selectedUserForAssign} onChange={(e) => setSelectedUserForAssign(e.target.value)}>
-                  {users.filter((u) => u.role === 'user').map((u) => (
-                    <option key={u._id} value={u._id}>{u.username}</option>
+                  {users.map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.username} ({u.role})
+                    </option>
                   ))}
                 </select>
               </label>
@@ -684,7 +686,7 @@ export function AdminPage() {
               <div key={a._id} className="row-item">
                 <div>
                   <strong>{a.user_id?.username || 'unbekannt'}</strong>
-                  <small>Zugewiesen</small>
+                  <small>Zugewiesen{a.user_id?.role ? ` (${a.user_id.role})` : ''}</small>
                 </div>
                 <button
                   className="danger-btn"
