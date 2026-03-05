@@ -173,6 +173,17 @@ export function DashboardPage({ user }) {
     }
   };
 
+  const ensureProfileReady = async (studyId) => {
+    if (user?.role !== 'user') return true;
+    try {
+      await profileApi.getStudyProfile(studyId);
+      return true;
+    } catch {
+      navigate(`/profile-setup/${studyId}`);
+      return false;
+    }
+  };
+
   const openStudy = async (studyId) => {
     const existing = latestSessionByStudy[String(studyId)];
     if (existing?.status === 'done') {
@@ -180,6 +191,8 @@ export function DashboardPage({ user }) {
       return;
     }
     if (existing?.status === 'in_progress') {
+      const profileReady = await ensureProfileReady(studyId);
+      if (!profileReady) return;
       navigate(`/session/${existing._id}`);
       return;
     }

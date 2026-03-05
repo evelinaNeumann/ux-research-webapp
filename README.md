@@ -73,6 +73,7 @@ npm run dev
 - Analytics: `Dokumentation/analytics.md`
 - MongoDB: `Dokumentation/mongodb-kollektionen.md`, `Dokumentation/database-schema.md`
 - Deployment: `Dokumentation/deployment-quickstart.md`, `deploy/docker-compose.prod.yml`
+- Operations: `Dokumentation/server-operations-runbook.md`
 
 ## Wichtiger Hinweis
 PNG-Chart-Export ist als Endpoint scaffolded (`POST /analytics/export/chart`) und gibt aktuell `501` zurück.
