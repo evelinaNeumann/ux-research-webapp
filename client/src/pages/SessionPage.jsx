@@ -86,16 +86,16 @@ export function SessionPage() {
       try {
         const s = await sessionApi.get(sessionId);
         setSession(s);
-        const st = await studyApi.getById(s.study_id);
+        const st = await studyApi.getById(s.study_id, flowStudyId);
         setStudy(st);
 
         const [q, c, columns, i] = await Promise.all([
-          studyApi.getQuestions(s.study_id),
-          studyApi.getCards(s.study_id),
-          studyApi.getCardSortColumns(s.study_id),
-          studyApi.getImages(s.study_id),
+          studyApi.getQuestions(s.study_id, flowStudyId),
+          studyApi.getCards(s.study_id, flowStudyId),
+          studyApi.getCardSortColumns(s.study_id, flowStudyId),
+          studyApi.getImages(s.study_id, flowStudyId),
         ]);
-        const loadedTasks = await studyApi.getTasks(s.study_id);
+        const loadedTasks = await studyApi.getTasks(s.study_id, flowStudyId);
         setQuestions(q || []);
         setCards(c || []);
         setCardSortColumns(columns || []);
@@ -176,7 +176,7 @@ export function SessionPage() {
         setMessageType('error');
       }
     })();
-  }, [sessionId]);
+  }, [sessionId, flowStudyId]);
 
   useEffect(
     () => () => {
@@ -419,6 +419,7 @@ export function SessionPage() {
   }, [tasks.length]);
 
   const isReadOnly = session?.status === 'done';
+  const isMixedFlowSection = !!flowStudyId;
   const imageRatingPrompt = String(study?.image_rating_prompt || '').trim();
   const imageRatingTasks = Array.isArray(study?.image_rating_tasks)
     ? [...study.image_rating_tasks].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
@@ -851,7 +852,7 @@ export function SessionPage() {
               </button>
             ))}
           </div>
-          {!isReadOnly && (
+          {!isReadOnly && !isMixedFlowSection && (
             <button className="primary-btn" onClick={completeSession}>
               Studienteilnahme abschließen
             </button>
@@ -1084,7 +1085,11 @@ export function SessionPage() {
                 />
               </label>
             ))}
-            {!isReadOnly && <button className="primary-btn" onClick={saveQuestionnaire}>Antworten speichern</button>}
+            {!isReadOnly && (
+              <button className={`primary-btn ${isMixedFlowSection ? 'session-save-btn' : ''}`} onClick={saveQuestionnaire}>
+                Antworten speichern
+              </button>
+            )}
           </div>
         </CardPanel>
       )}
@@ -1275,7 +1280,11 @@ export function SessionPage() {
               </div>
               </>
             )}
-            {!isReadOnly && <button className="primary-btn" onClick={saveCardSort}>Antworten speichern</button>}
+            {!isReadOnly && (
+              <button className={`primary-btn ${isMixedFlowSection ? 'session-save-btn' : ''}`} onClick={saveCardSort}>
+                Antworten speichern
+              </button>
+            )}
           </div>
         </CardPanel>
       )}
@@ -1573,7 +1582,9 @@ export function SessionPage() {
           {!isReadOnly && (
             <div className="image-save-row">
               <div />
-              <button className="primary-btn" onClick={saveImageRatings}>Antworten speichern</button>
+              <button className={`primary-btn ${isMixedFlowSection ? 'session-save-btn' : ''}`} onClick={saveImageRatings}>
+                Antworten speichern
+              </button>
             </div>
           )}
         </CardPanel>

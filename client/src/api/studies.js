@@ -5,11 +5,16 @@ export const studyApi = {
   getById: (id, flowStudyId = '') =>
     http(`/studies/${id}${flowStudyId ? `?flow_study_id=${encodeURIComponent(flowStudyId)}` : ''}`),
   getComposedSections: (id) => http(`/studies/${id}/composed-sections`),
-  getQuestions: (id) => http(`/studies/${id}/questions`),
-  getCards: (id) => http(`/studies/${id}/cards`),
-  getCardSortColumns: (id) => http(`/studies/${id}/card-sort-columns`),
-  getImages: (id) => http(`/studies/${id}/images`),
-  getTasks: (id) => http(`/studies/${id}/tasks`),
+  getQuestions: (id, flowStudyId = '') =>
+    http(`/studies/${id}/questions${flowStudyId ? `?flow_study_id=${encodeURIComponent(flowStudyId)}` : ''}`),
+  getCards: (id, flowStudyId = '') =>
+    http(`/studies/${id}/cards${flowStudyId ? `?flow_study_id=${encodeURIComponent(flowStudyId)}` : ''}`),
+  getCardSortColumns: (id, flowStudyId = '') =>
+    http(`/studies/${id}/card-sort-columns${flowStudyId ? `?flow_study_id=${encodeURIComponent(flowStudyId)}` : ''}`),
+  getImages: (id, flowStudyId = '') =>
+    http(`/studies/${id}/images${flowStudyId ? `?flow_study_id=${encodeURIComponent(flowStudyId)}` : ''}`),
+  getTasks: (id, flowStudyId = '') =>
+    http(`/studies/${id}/tasks${flowStudyId ? `?flow_study_id=${encodeURIComponent(flowStudyId)}` : ''}`),
   getProfileCards: (id, flowStudyId = '') =>
     http(`/studies/${id}/profile-cards${flowStudyId ? `?flow_study_id=${encodeURIComponent(flowStudyId)}` : ''}`),
   create: (payload) => http('/studies', { method: 'POST', body: JSON.stringify(payload) }),
