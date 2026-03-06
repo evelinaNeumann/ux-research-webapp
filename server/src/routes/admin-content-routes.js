@@ -229,6 +229,16 @@ router.delete('/users/:userId', async (req, res, next) => {
     if (adminCount <= 1) return next(badRequest('cannot delete last admin'));
   }
 
+  await StudyAssignment.updateMany(
+    { user_id: req.params.userId, is_active: true },
+    {
+      $set: {
+        is_active: false,
+        assigned_by: req.auth.sub,
+        assigned_at: new Date(),
+      },
+    }
+  );
   await User.findByIdAndDelete(req.params.userId);
   res.status(204).send();
 });
@@ -326,9 +336,25 @@ router.put('/users/:userId/profiles/:studyId', async (req, res, next) => {
 });
 
 router.get('/studies/:studyId/assignments', async (req, res) => {
-  const items = await StudyAssignment.find({ study_id: req.params.studyId, is_active: true })
+  const rawItems = await StudyAssignment.find({ study_id: req.params.studyId, is_active: true })
     .populate('user_id', 'username role')
     .sort({ assigned_at: -1 });
+
+  const orphanIds = rawItems.filter((item) => !item.user_id).map((item) => item._id);
+  if (orphanIds.length > 0) {
+    await StudyAssignment.updateMany(
+      { _id: { $in: orphanIds } },
+      {
+        $set: {
+          is_active: false,
+          assigned_by: req.auth.sub,
+          assigned_at: new Date(),
+        },
+      }
+    );
+  }
+
+  const items = rawItems.filter((item) => !!item.user_id);
   res.json(items);
 });
 
