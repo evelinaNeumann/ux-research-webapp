@@ -553,28 +553,37 @@ export function SessionPage() {
   };
 
   useEffect(() => {
-    if (activeModule !== 'image_rating' || isReadOnly) return;
-    for (const task of imageRatingTasks) {
-      if (task.type !== 'image_impression') continue;
-      const taskId = String(task.task_id || '');
-      if (!taskId) continue;
-      if (imageTaskResponses[taskId]?.timed_out) continue;
-      if (imageTaskResponses[taskId]?.payload?.selected_cards?.length) continue;
-      if (imageImpressionStateByTask[taskId]) continue;
-      setImageImpressionStateByTask((prev) => ({ ...prev, [taskId]: 'show' }));
-      const durationMs = Math.max(1, Number(task.duration_sec || 5)) * 1000;
-      imageImpressionTimersRef.current[taskId] = setTimeout(async () => {
-        setImageImpressionStateByTask((prev) => ({ ...prev, [taskId]: 'select' }));
-        setImageTaskResponses((prev) => ({
-          ...prev,
-          [taskId]: {
-            payload: prev[taskId]?.payload || {},
-            timed_out: !!prev[taskId]?.timed_out,
-          },
-        }));
-      }, durationMs);
-    }
-  }, [activeModule, imageRatingTasks, imageTaskResponses, imageImpressionStateByTask, isReadOnly, session?._id]);
+    if (activeModule !== 'image_rating' || isReadOnly || imageRatingTasks.length === 0) return;
+    const safeIdx = Math.min(Math.max(activeImageTaskIndex, 0), imageRatingTasks.length - 1);
+    const task = imageRatingTasks[safeIdx];
+    if (!task || task.type !== 'image_impression') return;
+    const taskId = String(task.task_id || '');
+    if (!taskId) return;
+    if (imageTaskResponses[taskId]?.timed_out) return;
+    if (imageTaskResponses[taskId]?.payload?.selected_cards?.length) return;
+    if (imageImpressionStateByTask[taskId]) return;
+
+    setImageImpressionStateByTask((prev) => ({ ...prev, [taskId]: 'show' }));
+    const durationMs = Math.max(1, Number(task.duration_sec || 5)) * 1000;
+    imageImpressionTimersRef.current[taskId] = setTimeout(() => {
+      setImageImpressionStateByTask((prev) => ({ ...prev, [taskId]: 'select' }));
+      setImageTaskResponses((prev) => ({
+        ...prev,
+        [taskId]: {
+          payload: prev[taskId]?.payload || {},
+          timed_out: !!prev[taskId]?.timed_out,
+        },
+      }));
+    }, durationMs);
+  }, [
+    activeModule,
+    activeImageTaskIndex,
+    imageRatingTasks,
+    imageTaskResponses,
+    imageImpressionStateByTask,
+    isReadOnly,
+    session?._id,
+  ]);
 
   const completeSession = async () => {
     if (!session) return;
