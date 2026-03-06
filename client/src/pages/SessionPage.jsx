@@ -1335,7 +1335,7 @@ export function SessionPage() {
                         {imageImpressionStateByTask[taskId] === 'show' ? (
                           <div className="image-preview-wrap image-preview-single">{renderImage(imageA)}</div>
                         ) : (
-                          <div className="chip-list">
+                          <div className="image-impression-grid">
                             {(task.cards || []).map((card) => {
                               const selected = (response.selected_cards || []).includes(card);
                               const maxSelect = Number(task.max_select || 5) || 5;
@@ -1343,7 +1343,7 @@ export function SessionPage() {
                                 <button
                                   key={`${taskId}-${card}`}
                                   type="button"
-                                  className={selected ? 'chip-item active' : 'chip-item'}
+                                  className={selected ? 'chip-item image-impression-card active' : 'chip-item image-impression-card'}
                                   disabled={isReadOnly}
                                   onClick={() => {
                                     if (isReadOnly) return;

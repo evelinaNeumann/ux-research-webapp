@@ -322,6 +322,26 @@ button.chip-item {
   color: #ffffff;
 }
 
+.image-impression-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 0.6rem;
+  width: min(100%, 980px);
+  margin: 0.4rem auto 0;
+  justify-items: stretch;
+}
+
+.image-impression-card {
+  width: 100%;
+  min-height: 48px;
+  font-size: 0.95rem;
+  padding: 0.45rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
 .custom-card-list {
   display: grid;
   gap: 0.35rem;
@@ -663,6 +683,11 @@ button.chip-item {
 
   .image-compare-row {
     grid-template-columns: 1fr;
+  }
+
+  .image-impression-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+    width: 100%;
   }
 
   .assignment-row {
