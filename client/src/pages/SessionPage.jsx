@@ -788,16 +788,28 @@ export function SessionPage() {
         step_index: Number(stepIndex || 0),
         selected_ids: selected,
       });
-      setTaskResponses((prev) => ({
-        ...prev,
-        [responseKey]: {
-          selected_ids: result.selected_ids || [],
-          is_correct: !!result.is_correct,
-          result_status: result.result_status || 'incorrect',
-          timed_out: !!result.timed_out,
-          timeout_note: result.timeout_note || '',
-        },
-      }));
+      const persistedResponse = {
+        selected_ids: result.selected_ids || [],
+        is_correct: !!result.is_correct,
+        result_status: result.result_status || 'incorrect',
+        timed_out: !!result.timed_out,
+        timeout_note: result.timeout_note || '',
+      };
+      setTaskResponses((prev) => {
+        const next = {
+          ...prev,
+          [responseKey]: persistedResponse,
+        };
+        const steps = getTaskSteps(task);
+        const allStepsAnswered = steps.every((_, idx) => !!next[`${taskId}:${idx}`]);
+        if (allStepsAnswered) {
+          const taskIdx = tasks.findIndex((item) => String(item._id) === taskId);
+          if (taskIdx >= 0 && taskIdx < tasks.length - 1) {
+            setActiveTaskIndex((current) => (current === taskIdx ? taskIdx + 1 : current));
+          }
+        }
+        return next;
+      });
       setMessageType(result.is_correct ? 'success' : 'error');
       setMessage(result.is_correct ? 'Antwort gespeichert: korrekt.' : 'Antwort gespeichert: falsch.');
     } catch (err) {
