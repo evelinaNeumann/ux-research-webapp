@@ -24,11 +24,11 @@ function moduleOrderForStudyType(type) {
   return ['questionnaire', 'card_sort', 'image_rating'];
 }
 
-async function assertStudyAccess(studyId, auth) {
+async function assertStudyAccess(studyId, auth, flowStudyId = '') {
   const study = await Study.findById(studyId);
   if (!study) throw notFound('study not found');
   if (auth.role !== 'admin') {
-    const hasAccess = await hasStudyAccessForUser(study, auth.sub);
+    const hasAccess = await hasStudyAccessForUser(study, auth.sub, { flowStudyId });
     if (!hasAccess) throw notFound('study not found');
   }
   return study;
@@ -121,7 +121,7 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:id', async (req, res, next) => {
   try {
-    const study = await assertStudyAccess(req.params.id, req.auth);
+    const study = await assertStudyAccess(req.params.id, req.auth, req.query?.flow_study_id || req.query?.flowStudyId || '');
     res.json(study);
   } catch (err) {
     next(err);
@@ -130,7 +130,7 @@ router.get('/:id', async (req, res, next) => {
 
 router.get('/:id/questions', async (req, res, next) => {
   try {
-    await assertStudyAccess(req.params.id, req.auth);
+    await assertStudyAccess(req.params.id, req.auth, req.query?.flow_study_id || req.query?.flowStudyId || '');
     const items = await Question.find({ study_id: req.params.id }).sort({ _id: 1 });
     res.json(items);
   } catch (err) {
@@ -140,7 +140,7 @@ router.get('/:id/questions', async (req, res, next) => {
 
 router.get('/:id/cards', async (req, res, next) => {
   try {
-    await assertStudyAccess(req.params.id, req.auth);
+    await assertStudyAccess(req.params.id, req.auth, req.query?.flow_study_id || req.query?.flowStudyId || '');
     const items = await Card.find({ study_id: req.params.id }).sort({ _id: 1 });
     res.json(items);
   } catch (err) {
@@ -150,7 +150,7 @@ router.get('/:id/cards', async (req, res, next) => {
 
 router.get('/:id/card-sort-columns', async (req, res, next) => {
   try {
-    await assertStudyAccess(req.params.id, req.auth);
+    await assertStudyAccess(req.params.id, req.auth, req.query?.flow_study_id || req.query?.flowStudyId || '');
     const items = await CardSortColumn.find({ study_id: req.params.id, is_active: true }).sort({ order_index: 1 });
     res.json(items);
   } catch (err) {
@@ -160,7 +160,7 @@ router.get('/:id/card-sort-columns', async (req, res, next) => {
 
 router.get('/:id/images', async (req, res, next) => {
   try {
-    await assertStudyAccess(req.params.id, req.auth);
+    await assertStudyAccess(req.params.id, req.auth, req.query?.flow_study_id || req.query?.flowStudyId || '');
     const items = await ImageAsset.find({ study_id: req.params.id }).sort({ uploaded_at: 1 });
     res.json(items);
   } catch (err) {
@@ -170,7 +170,7 @@ router.get('/:id/images', async (req, res, next) => {
 
 router.get('/:id/tasks', async (req, res, next) => {
   try {
-    await assertStudyAccess(req.params.id, req.auth);
+    await assertStudyAccess(req.params.id, req.auth, req.query?.flow_study_id || req.query?.flowStudyId || '');
     const items = await ResearchTask.find({ study_id: req.params.id }).sort({ order_index: 1, _id: 1 });
     res.json(items);
   } catch (err) {
@@ -180,7 +180,7 @@ router.get('/:id/tasks', async (req, res, next) => {
 
 router.get('/:id/profile-cards', async (req, res, next) => {
   try {
-    await assertStudyAccess(req.params.id, req.auth);
+    await assertStudyAccess(req.params.id, req.auth, req.query?.flow_study_id || req.query?.flowStudyId || '');
     const items = await StudyProfileCard.find({ study_id: req.params.id, is_active: true }).sort({ order_index: 1 });
     res.json(items);
   } catch (err) {
@@ -367,7 +367,7 @@ router.post('/:id/brief-pdf', requireRole('admin'), uploadStudyPdf.single('file'
 
 router.get('/:id/composed-sections', async (req, res, next) => {
   try {
-    const parentStudy = await assertStudyAccess(req.params.id, req.auth);
+    const parentStudy = await assertStudyAccess(req.params.id, req.auth, req.query?.flow_study_id || req.query?.flowStudyId || '');
     const sortedSections = Array.isArray(parentStudy.composed_sections)
       ? [...parentStudy.composed_sections].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
       : [];

@@ -125,11 +125,12 @@ router.get('/options', (_req, res) => {
 
 router.get('/study/:studyId', async (req, res, next) => {
   try {
+    const flowStudyId = String(req.query?.flow_study_id || req.query?.flowStudyId || '').trim();
     const study = await Study.findById(req.params.studyId);
     if (!study) throw notFound('study not found');
 
     if (req.auth.role !== 'admin') {
-      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub);
+      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub, { flowStudyId });
       if (!hasAccess) throw forbidden('study not assigned to user');
     }
 
@@ -144,11 +145,12 @@ router.get('/study/:studyId', async (req, res, next) => {
 
 router.get('/study/:studyId/prefill', async (req, res, next) => {
   try {
+    const flowStudyId = String(req.query?.flow_study_id || req.query?.flowStudyId || '').trim();
     const study = await Study.findById(req.params.studyId);
     if (!study) throw notFound('study not found');
 
     if (req.auth.role !== 'admin') {
-      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub);
+      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub, { flowStudyId });
       if (!hasAccess) throw forbidden('study not assigned to user');
     }
 
@@ -220,6 +222,7 @@ router.get('/me', async (req, res, next) => {
 
 router.put('/study/:studyId', async (req, res, next) => {
   try {
+    const flowStudyId = String(req.query?.flow_study_id || req.query?.flowStudyId || '').trim();
     const { age_range, role_category, role_custom, key_points } = req.body;
     const study = await Study.findById(req.params.studyId, {
       is_active: 1,
@@ -231,7 +234,7 @@ router.put('/study/:studyId', async (req, res, next) => {
     });
     if (!study) throw notFound('study not found');
     if (req.auth.role !== 'admin') {
-      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub);
+      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub, { flowStudyId });
       if (!hasAccess) throw forbidden('study not assigned to user');
     }
 

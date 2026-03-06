@@ -76,7 +76,7 @@ export function StudyFlowPage({ user }) {
 
     try {
       setStarting(true);
-      const session = await sessionApi.start(section._id);
+      const session = await sessionApi.start(section._id, studyId);
       navigate(`/session/${session._id}?flowStudy=${studyId}`);
     } catch (err) {
       const msg = String(err?.message || '');

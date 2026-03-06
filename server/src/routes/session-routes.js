@@ -117,13 +117,13 @@ function isCompleteProfileForSession(profile, profileCardCount) {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { study_id } = req.body;
+    const { study_id, flow_study_id } = req.body;
     if (!study_id) throw badRequest('study_id required');
 
     const study = await Study.findById(study_id);
     if (!study) throw notFound('study not found');
     if (req.auth.role !== 'admin') {
-      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub);
+      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub, { flowStudyId: flow_study_id });
       if (!hasAccess) throw forbidden('study not assigned to user');
 
       const { profile, profileCardCount } = await resolveProfileForSessionStart(study, req.auth.sub);

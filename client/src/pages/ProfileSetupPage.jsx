@@ -40,9 +40,9 @@ export function ProfileSetupPage() {
       try {
         const [opts, profileCards, prefill, studyRes] = await Promise.all([
           profileApi.options(),
-          studyApi.getProfileCards(studyId),
-          profileApi.getStudyPrefill(studyId),
-          studyApi.getById(studyId),
+          studyApi.getProfileCards(studyId, flowStudyId),
+          profileApi.getStudyPrefill(studyId, flowStudyId),
+          studyApi.getById(studyId, flowStudyId),
         ]);
         setAgeRanges(opts.age_ranges || []);
         setCards(profileCards || []);
@@ -71,7 +71,7 @@ export function ProfileSetupPage() {
         }
 
         try {
-          const existing = await profileApi.getStudyProfile(studyId);
+          const existing = await profileApi.getStudyProfile(studyId, flowStudyId);
           setForm({
             age_range: existing.age_range || '',
             role_category: existing.role_category || 'schueler_azubi_student',
@@ -86,7 +86,7 @@ export function ProfileSetupPage() {
         setMessage(err.message);
       }
     })();
-  }, [studyId]);
+  }, [studyId, flowStudyId]);
 
   const togglePoint = (label) => {
     const exists = form.key_points.includes(label);
@@ -107,15 +107,19 @@ export function ProfileSetupPage() {
         return;
       }
 
-      await profileApi.saveStudyProfile(studyId, {
-        ...form,
-        key_points: hasProfileWords ? form.key_points : [],
-      });
+      await profileApi.saveStudyProfile(
+        studyId,
+        {
+          ...form,
+          key_points: hasProfileWords ? form.key_points : [],
+        },
+        flowStudyId
+      );
       if (study?.brief_pdf_path) {
         setShowBriefing(true);
         return;
       }
-      const session = await sessionApi.start(studyId);
+      const session = await sessionApi.start(studyId, flowStudyId);
       navigate(`/session/${session._id}${flowStudyId ? `?flowStudy=${flowStudyId}` : ''}`);
     } catch (err) {
       setMessage(err.message);
@@ -126,7 +130,7 @@ export function ProfileSetupPage() {
     try {
       setSaving(true);
       setMessage('');
-      const session = await sessionApi.start(studyId);
+      const session = await sessionApi.start(studyId, flowStudyId);
       setShowBriefing(false);
       navigate(`/session/${session._id}${flowStudyId ? `?flowStudy=${flowStudyId}` : ''}`);
     } catch (err) {
