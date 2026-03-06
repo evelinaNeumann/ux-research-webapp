@@ -11,6 +11,8 @@ import { AdminAnalyticsPage } from './pages/AdminAnalyticsPage';
 import { ProfileSetupPage } from './pages/ProfileSetupPage';
 import { MyProfileDataPage } from './pages/MyProfileDataPage';
 import { PrivacyConsentPage } from './pages/PrivacyConsentPage';
+import { StudyFlowPage } from './pages/StudyFlowPage';
+import { AdminMixedStudiesPage } from './pages/AdminMixedStudiesPage';
 
 function Protected({ user, children }) {
   if (!user) return <Navigate to="/login" replace />;
@@ -57,6 +59,7 @@ export function App({ user, setUser }) {
       >
         <Route path="/" element={<DashboardPage user={user} />} />
         <Route path="/session/:sessionId" element={<SessionPage />} />
+        <Route path="/study-flow/:studyId" element={<StudyFlowPage user={user} />} />
         <Route path="/profile-setup/:studyId" element={<ProfileSetupPage />} />
         <Route path="/my-profile-data" element={<MyProfileDataPage />} />
         <Route path="/user-data" element={<UserDataPage onAuth={setUser} />} />
@@ -81,6 +84,14 @@ export function App({ user, setUser }) {
           element={
             <AdminOnly user={user}>
               <AdminPage />
+            </AdminOnly>
+          }
+        />
+        <Route
+          path="/admin/mixed"
+          element={
+            <AdminOnly user={user}>
+              <AdminMixedStudiesPage />
             </AdminOnly>
           }
         />

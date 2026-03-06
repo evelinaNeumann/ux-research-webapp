@@ -18,6 +18,7 @@ export function AppLayout({ user }) {
           <Link to="/">Dashboard</Link>
           {user?.role === 'admin' && <Link to="/admin/users">Benutzer & Rollen</Link>}
           {user?.role === 'admin' && <Link to="/admin/analytics">Studien Auswertungen</Link>}
+          {user?.role === 'admin' && <Link to="/admin/mixed">Mixed Studie</Link>}
           <Link to="/my-profile-data">Meine Profil Data</Link>
           <Link to="/user-data">Userdaten ändern</Link>
           {user?.role === 'admin' && <Link to="/admin">Admin</Link>}

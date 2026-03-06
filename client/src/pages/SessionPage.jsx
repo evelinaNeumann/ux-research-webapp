@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CardPanel } from '../components/CardPanel';
 import { API_BASE } from '../api/http';
 import { sessionApi } from '../api/sessions';
@@ -44,6 +44,8 @@ function sanitizeInteractiveHtml(html) {
 
 export function SessionPage() {
   const { sessionId } = useParams();
+  const [searchParams] = useSearchParams();
+  const flowStudyId = String(searchParams.get('flowStudy') || '').trim();
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [study, setStudy] = useState(null);
@@ -514,7 +516,7 @@ export function SessionPage() {
     if (!session || isReadOnly) return false;
     try {
       await sessionApi.complete(session._id);
-      navigate('/');
+      navigate(flowStudyId ? `/study-flow/${flowStudyId}` : '/');
       return true;
     } catch (err) {
       if (shouldIgnoreAutoCompleteError(err?.message)) return false;
@@ -676,7 +678,7 @@ export function SessionPage() {
         await persistImageRatings();
       }
       await sessionApi.complete(session._id);
-      navigate('/');
+      navigate(flowStudyId ? `/study-flow/${flowStudyId}` : '/');
     } catch (err) {
       setMessage(err.message);
       setMessageType('error');

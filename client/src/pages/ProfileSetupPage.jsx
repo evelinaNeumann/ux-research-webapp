@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CardPanel } from '../components/CardPanel';
 import { API_BASE } from '../api/http';
 import { profileApi } from '../api/profile';
@@ -16,6 +16,8 @@ const ROLE_OPTIONS = [
 
 export function ProfileSetupPage() {
   const { studyId } = useParams();
+  const [searchParams] = useSearchParams();
+  const flowStudyId = String(searchParams.get('flowStudy') || '').trim();
   const navigate = useNavigate();
   const [ageRanges, setAgeRanges] = useState([]);
   const [cards, setCards] = useState([]);
@@ -114,7 +116,7 @@ export function ProfileSetupPage() {
         return;
       }
       const session = await sessionApi.start(studyId);
-      navigate(`/session/${session._id}`);
+      navigate(`/session/${session._id}${flowStudyId ? `?flowStudy=${flowStudyId}` : ''}`);
     } catch (err) {
       setMessage(err.message);
     }
@@ -126,7 +128,7 @@ export function ProfileSetupPage() {
       setMessage('');
       const session = await sessionApi.start(studyId);
       setShowBriefing(false);
-      navigate(`/session/${session._id}`);
+      navigate(`/session/${session._id}${flowStudyId ? `?flowStudy=${flowStudyId}` : ''}`);
     } catch (err) {
       setMessage(err.message || 'Studie konnte nicht gestartet werden.');
     } finally {

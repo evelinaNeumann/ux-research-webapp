@@ -3,6 +3,7 @@ import { http } from './http';
 export const studyApi = {
   list: () => http('/studies'),
   getById: (id) => http(`/studies/${id}`),
+  getComposedSections: (id) => http(`/studies/${id}/composed-sections`),
   getQuestions: (id) => http(`/studies/${id}/questions`),
   getCards: (id) => http(`/studies/${id}/cards`),
   getCardSortColumns: (id) => http(`/studies/${id}/card-sort-columns`),

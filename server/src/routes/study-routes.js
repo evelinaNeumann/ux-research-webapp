@@ -64,6 +64,32 @@ async function validateProfileInheritanceConfig({
   };
 }
 
+async function validateComposedSections(targetStudyId = null, composed_sections = undefined) {
+  if (composed_sections === undefined) return undefined;
+  if (!Array.isArray(composed_sections)) throw badRequest('composed_sections must be an array');
+
+  const normalized = composed_sections
+    .map((item, idx) => ({
+      study_id: String(item?.study_id || '').trim(),
+      order_index: Number.isFinite(Number(item?.order_index)) ? Number(item.order_index) : idx,
+    }))
+    .filter((item) => item.study_id);
+
+  if (normalized.length === 0) return [];
+
+  const uniqueIds = Array.from(new Set(normalized.map((item) => item.study_id)));
+  if (targetStudyId && uniqueIds.some((id) => String(id) === String(targetStudyId))) {
+    throw badRequest('composed section cannot reference the same study');
+  }
+
+  const existingStudies = await Study.find({ _id: { $in: uniqueIds } }, { _id: 1 }).lean();
+  if (existingStudies.length !== uniqueIds.length) throw badRequest('one or more composed section studies not found');
+
+  return normalized
+    .sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
+    .map((item, idx) => ({ study_id: item.study_id, order_index: idx }));
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req.query);
@@ -177,6 +203,7 @@ router.post('/', requireRole('admin'), async (req, res, next) => {
       inherit_user_profile_points,
       ask_demographics_again,
       ask_key_points_again,
+      composed_sections,
     } = req.body;
     if (!name) throw badRequest('name required');
     const inheritance = await validateProfileInheritanceConfig({
@@ -197,6 +224,7 @@ router.post('/', requireRole('admin'), async (req, res, next) => {
       inherit_user_profile_points: inheritance.inheritUserPoints,
       ask_demographics_again: !!ask_demographics_again,
       ask_key_points_again: !!ask_key_points_again,
+      composed_sections: (await validateComposedSections(null, composed_sections)) || [],
     });
     res.status(201).json(study);
   } catch (err) {
@@ -220,6 +248,7 @@ router.put('/:id', requireRole('admin'), async (req, res, next) => {
       inherit_user_profile_points,
       ask_demographics_again,
       ask_key_points_again,
+      composed_sections,
     } = req.body;
     const study = await Study.findById(req.params.id);
     if (!study) throw notFound('study not found');
@@ -243,6 +272,9 @@ router.put('/:id', requireRole('admin'), async (req, res, next) => {
     if (ask_demographics_again !== undefined) study.ask_demographics_again = !!ask_demographics_again;
     if (ask_key_points_again !== undefined) study.ask_key_points_again = !!ask_key_points_again;
     if (module_order !== undefined) study.module_order = module_order;
+    if (composed_sections !== undefined) {
+      study.composed_sections = await validateComposedSections(study._id, composed_sections);
+    }
     if (
       profile_cards_source_study_id !== undefined ||
       inherit_profile_cards !== undefined ||
@@ -328,6 +360,34 @@ router.post('/:id/brief-pdf', requireRole('admin'), uploadStudyPdf.single('file'
     await study.save();
 
     res.json(study);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id/composed-sections', async (req, res, next) => {
+  try {
+    const parentStudy = await assertStudyAccess(req.params.id, req.auth);
+    const sortedSections = Array.isArray(parentStudy.composed_sections)
+      ? [...parentStudy.composed_sections].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
+      : [];
+    const sectionIds = sortedSections.map((item) => item.study_id).filter(Boolean);
+    if (sectionIds.length === 0) return res.json({ study_id: parentStudy._id, sections: [] });
+
+    const sectionStudies = await Study.find({ _id: { $in: sectionIds } }, {
+      _id: 1,
+      name: 1,
+      type: 1,
+      brief_pdf_path: 1,
+      brief_pdf_name: 1,
+      is_active: 1,
+    }).lean();
+    const byId = Object.fromEntries(sectionStudies.map((item) => [String(item._id), item]));
+    const sections = sortedSections
+      .map((item) => byId[String(item.study_id)] || null)
+      .filter(Boolean);
+
+    res.json({ study_id: parentStudy._id, sections });
   } catch (err) {
     next(err);
   }

@@ -53,6 +53,18 @@ const studySchema = new mongoose.Schema(
       type: [String],
       default: ['questionnaire', 'card_sort', 'image_rating'],
     },
+    composed_sections: {
+      type: [
+        new mongoose.Schema(
+          {
+            study_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Study', required: true },
+            order_index: { type: Number, default: 0 },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
     brief_pdf_path: { type: String, default: '' },
     brief_pdf_name: { type: String, default: '' },
   },

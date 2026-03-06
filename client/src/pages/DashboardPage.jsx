@@ -60,13 +60,16 @@ export function DashboardPage({ user }) {
       await enrichSessionMeta(allSessions, allStudies);
 
       if (user?.role === 'user') {
+        const studiesNeedingProfile = allStudies.filter(
+          (studyItem) => !Array.isArray(studyItem.composed_sections) || studyItem.composed_sections.length === 0
+        );
         const checks = await Promise.allSettled(
-          allStudies.map(async (s) => {
+          studiesNeedingProfile.map(async (s) => {
             await profileApi.getStudyProfile(s._id);
             return s._id;
           })
         );
-        const missing = allStudies.filter((_, idx) => checks[idx].status === 'rejected');
+        const missing = studiesNeedingProfile.filter((_, idx) => checks[idx].status === 'rejected');
         setMissingProfiles(missing);
       } else {
         setMissingProfiles([]);
@@ -192,6 +195,12 @@ export function DashboardPage({ user }) {
   };
 
   const openStudy = async (studyId) => {
+    const study = studies.find((s) => String(s._id) === String(studyId));
+    const isComposedStudy = Array.isArray(study?.composed_sections) && study.composed_sections.length > 0;
+    if (isComposedStudy) {
+      navigate(`/study-flow/${studyId}`);
+      return;
+    }
     const existing = latestSessionByStudy[String(studyId)];
     if (existing?.status === 'done') {
       navigate(`/session/${existing._id}`);
@@ -199,7 +208,6 @@ export function DashboardPage({ user }) {
     }
     const profileReady = await ensureProfileReady(studyId);
     if (!profileReady) return;
-    const study = studies.find((s) => String(s._id) === String(studyId));
     const hasBriefingPdf = user?.role === 'user' && !existing && !!study?.brief_pdf_path;
     if (hasBriefingPdf) {
       setBriefingState({
