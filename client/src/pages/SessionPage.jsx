@@ -1072,27 +1072,30 @@ export function SessionPage() {
 
       {modules.includes('questionnaire') && activeModule === 'questionnaire' && (
         <CardPanel title={isReadOnly ? 'Interview ansehen' : 'Interview bearbeiten'}>
-          {questions.length === 0 && <p>Keine Fragen vorhanden.</p>}
-          {questions.map((q) => (
-            <label className="form-row" key={q._id}>
-              <span>{q.text}</span>
-              <input
-                value={questionAnswers[q._id] || ''}
-                disabled={isReadOnly}
-                onChange={(e) => setQuestionAnswers({ ...questionAnswers, [q._id]: e.target.value })}
-              />
-            </label>
-          ))}
-          {!isReadOnly && <button className="primary-btn" onClick={saveQuestionnaire}>Antworten speichern</button>}
+          <div className="questionnaire-wrap">
+            {questions.length === 0 && <p>Keine Fragen vorhanden.</p>}
+            {questions.map((q) => (
+              <label className="form-row questionnaire-row" key={q._id}>
+                <span>{q.text}</span>
+                <input
+                  value={questionAnswers[q._id] || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => setQuestionAnswers({ ...questionAnswers, [q._id]: e.target.value })}
+                />
+              </label>
+            ))}
+            {!isReadOnly && <button className="primary-btn" onClick={saveQuestionnaire}>Antworten speichern</button>}
+          </div>
         </CardPanel>
       )}
 
       {modules.includes('card_sort') && activeModule === 'card_sort' && (
         <CardPanel title={isReadOnly ? 'Card Sorting ansehen' : 'Card Sorting bearbeiten'}>
-          {cards.length === 0 && <p>Keine Cards vorhanden.</p>}
-          {cardSortColumns.length === 0 && <p>Keine vordefinierten Spalten vorhanden. Admin muss Spalten anlegen.</p>}
-          {cardSortColumns.length > 0 && (
-            <>
+          <div className="cardsort-wrap">
+            {cards.length === 0 && <p>Keine Cards vorhanden.</p>}
+            {cardSortColumns.length === 0 && <p>Keine vordefinierten Spalten vorhanden. Admin muss Spalten anlegen.</p>}
+            {cardSortColumns.length > 0 && (
+              <>
               <div
                 className="unassigned-zone"
                 onDragOver={(e) => e.preventDefault()}
@@ -1270,9 +1273,10 @@ export function SessionPage() {
                   </div>
                 )}
               </div>
-            </>
-          )}
-          {!isReadOnly && <button className="primary-btn" onClick={saveCardSort}>Antworten speichern</button>}
+              </>
+            )}
+            {!isReadOnly && <button className="primary-btn" onClick={saveCardSort}>Antworten speichern</button>}
+          </div>
         </CardPanel>
       )}
 

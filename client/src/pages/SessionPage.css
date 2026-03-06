@@ -1,6 +1,8 @@
 .session-grid {
   display: grid;
   gap: 1rem;
+  max-width: 1700px;
+  margin: 0 auto;
 }
 
 .module-tabs {
@@ -94,7 +96,7 @@
   border-radius: 10px;
   padding: 0.55rem;
   background: #f8fafc;
-  min-height: 120px;
+  min-height: 145px;
 }
 
 .column-head {
@@ -121,7 +123,7 @@
   border: 1px solid #d8dce7;
   border-radius: 8px;
   padding: 0.55rem 0.6rem;
-  min-width: 110px;
+  min-width: 132px;
   text-align: left;
   cursor: grab;
   position: relative;
@@ -292,9 +294,49 @@
 }
 
 .idea-inline .ghost-btn {
-  min-width: 170px;
-  min-height: 40px;
+  min-width: 190px;
+  min-height: 44px;
   justify-self: start;
+}
+
+.questionnaire-wrap {
+  width: min(100%, 1100px);
+  margin: 0 auto;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.questionnaire-row span {
+  font-size: 0.96rem;
+  color: #374151;
+}
+
+.questionnaire-row input {
+  min-height: 46px;
+  font-size: 1rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.cardsort-wrap {
+  width: min(100%, 1700px);
+  margin: 0 auto;
+}
+
+.cardsort-wrap .column-board {
+  width: min(100%, 1580px);
+  margin: 0 auto 0.95rem;
+}
+
+.cardsort-wrap .unassigned-zone {
+  width: min(100%, 1580px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cardsort-wrap .idea-box {
+  width: min(100%, 1580px);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .chip-list {
@@ -659,6 +701,14 @@ button.chip-item {
 }
 
 @media (max-width: 900px) {
+  .questionnaire-wrap,
+  .cardsort-wrap,
+  .cardsort-wrap .column-board,
+  .cardsort-wrap .unassigned-zone,
+  .cardsort-wrap .idea-box {
+    width: 100%;
+  }
+
   .image-row {
     grid-template-columns: 1fr;
     align-items: start;
