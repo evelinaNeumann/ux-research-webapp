@@ -500,6 +500,21 @@ export function SessionPage() {
     }
   };
 
+  const saveTaskWorkProgress = async () => {
+    if (!session) return;
+    setMessage('');
+    try {
+      const autoCompleted = await tryAutoCompleteAfterSave();
+      if (!autoCompleted) {
+        setMessage('Aufgabenstand gespeichert.');
+        setMessageType('success');
+      }
+    } catch (err) {
+      setMessage(err.message);
+      setMessageType('error');
+    }
+  };
+
   const shouldIgnoreAutoCompleteError = (text) => {
     const msg = String(text || '').toLowerCase();
     return (
@@ -1067,6 +1082,15 @@ export function SessionPage() {
                 );
               })()}
             </div>
+          )}
+          {!isReadOnly && (
+            <button
+              type="button"
+              className={`primary-btn ${isMixedFlowSection ? 'session-save-btn' : ''}`}
+              onClick={saveTaskWorkProgress}
+            >
+              Antworten speichern
+            </button>
           )}
         </CardPanel>
       )}
