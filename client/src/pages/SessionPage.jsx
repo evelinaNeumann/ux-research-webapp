@@ -1333,7 +1333,7 @@ export function SessionPage() {
                     {task.type === 'image_impression' && (
                       <>
                         {imageImpressionStateByTask[taskId] === 'show' ? (
-                          <div className="image-preview-wrap">{renderImage(imageA)}</div>
+                          <div className="image-preview-wrap image-preview-single">{renderImage(imageA)}</div>
                         ) : (
                           <div className="chip-list">
                             {(task.cards || []).map((card) => {

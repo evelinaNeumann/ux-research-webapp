@@ -353,19 +353,32 @@ button.chip-item {
   justify-self: start;
   display: flex;
   justify-content: flex-start;
-  max-height: 520px;
+  max-height: min(78vh, 900px);
   overflow: auto;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #fff;
 }
 
-.image-row img {
-  width: 100%;
+.image-preview-wrap img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: min(76vh, 860px);
   height: auto;
   object-fit: contain;
+  margin: 0 auto;
+  image-rendering: auto;
   border: none;
   border-radius: 0;
+}
+
+.image-preview-single {
+  justify-self: center;
+  justify-content: center;
+  width: min(100%, 1100px);
+  margin-inline: auto;
+  padding: 0.25rem;
 }
 
 .image-fields {
@@ -634,6 +647,10 @@ button.chip-item {
   .image-preview-wrap {
     width: 100%;
     justify-content: center;
+  }
+
+  .image-preview-single {
+    width: 100%;
   }
 
   .image-save-row {
