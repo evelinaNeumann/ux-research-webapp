@@ -9,6 +9,9 @@
   padding: 1.2rem;
   border-right: 1px solid #e3e6ef;
   background: #fcfcfe;
+  display: grid;
+  gap: 0.8rem;
+  align-content: start;
 }
 
 .layout-sidebar h1 {
@@ -16,10 +19,31 @@
   font-size: 1.1rem;
 }
 
+.sidebar-groups {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.sidebar-card {
+  border: 1px solid #e3e6ef;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sidebar-card h2 {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 .layout-sidebar nav {
   display: grid;
   gap: 0.5rem;
-  margin-bottom: 1rem;
 }
 
 .layout-sidebar a {
@@ -32,6 +56,10 @@
 .layout-sidebar a:hover {
   background: #eef2ff;
   color: #1d4ed8;
+}
+
+.layout-sidebar .ghost-btn {
+  margin-top: 0.2rem;
 }
 
 .layout-main {
