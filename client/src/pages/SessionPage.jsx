@@ -306,102 +306,104 @@ export function SessionPage() {
 
   useEffect(() => {
     if (!session || session.status === 'done') return;
-    const hasTimedStep = tasks.some((task) => {
-      const taskId = String(task._id);
-      if (taskEndedById[taskId]) return false;
-      const steps = getTaskSteps(task);
-      const idx = getActiveTaskStepIndex(task);
-      const step = steps[idx];
-      const key = `${taskId}:${idx}`;
-      return Number(step?.time_limit_sec || 0) > 0 && !taskResponses[key];
-    });
+    const clampedIndex = Math.min(Math.max(activeTaskIndex, 0), Math.max(tasks.length - 1, 0));
+    const task = tasks[clampedIndex];
+    if (!task) return;
+    const taskId = String(task._id);
+    if (taskEndedById[taskId]) return;
+    const steps = getTaskSteps(task);
+    const idx = getActiveTaskStepIndex(task);
+    const step = steps[idx];
+    const key = `${taskId}:${idx}`;
+    const hasTimedStep = Number(step?.time_limit_sec || 0) > 0 && !taskResponses[key];
     if (!hasTimedStep) return;
     const timer = setInterval(() => setNowMs(Date.now()), 500);
     return () => clearInterval(timer);
-  }, [session, tasks, taskResponses, taskActiveStepById, taskEndedById]);
+  }, [session, tasks, taskResponses, taskActiveStepById, taskEndedById, activeTaskIndex]);
 
   useEffect(() => {
     if (!session || session.status === 'done') return;
+    const clampedIndex = Math.min(Math.max(activeTaskIndex, 0), Math.max(tasks.length - 1, 0));
+    const task = tasks[clampedIndex];
+    if (!task) return;
+    const taskId = String(task._id);
+    if (taskEndedById[taskId]) return;
     setTaskStepStartedAtByKey((prev) => {
-      let changed = false;
       const next = { ...prev };
-      for (const task of tasks) {
-        const taskId = String(task._id);
-        if (taskEndedById[taskId]) continue;
-        const idx = getActiveTaskStepIndex(task);
-        const step = getTaskSteps(task)[idx];
-        const limit = Number(step?.time_limit_sec || 0);
-        const key = `${taskId}:${idx}`;
-        if (limit > 0 && !taskResponses[key] && !next[key]) {
-          next[key] = Date.now();
-          changed = true;
-        }
+      const idx = getActiveTaskStepIndex(task);
+      const step = getTaskSteps(task)[idx];
+      const limit = Number(step?.time_limit_sec || 0);
+      const key = `${taskId}:${idx}`;
+      if (limit > 0 && !taskResponses[key] && !next[key]) {
+        next[key] = Date.now();
+        return next;
       }
-      return changed ? next : prev;
+      return prev;
     });
-  }, [session, tasks, taskResponses, taskActiveStepById, taskEndedById]);
+  }, [session, tasks, taskResponses, taskActiveStepById, taskEndedById, activeTaskIndex]);
 
   useEffect(() => {
     if (!session || session.status === 'done') return;
     (async () => {
-      for (const task of tasks) {
-        const taskId = String(task._id);
-        if (taskEndedById[taskId]) continue;
-        const steps = getTaskSteps(task);
-        const activeIdx = getActiveTaskStepIndex(task);
-        const activeStep = steps[activeIdx];
-        const limit = Number(activeStep?.time_limit_sec || 0);
-        if (limit <= 0) continue;
-        const key = `${taskId}:${activeIdx}`;
-        if (taskResponses[key]) continue;
-        const startedAt = Number(taskStepStartedAtByKey[key] || 0);
-        if (!startedAt) continue;
-        const elapsedSec = Math.floor((nowMs - startedAt) / 1000);
-        if (elapsedSec < limit) continue;
-        if (taskTimeoutInFlightRef.current.has(key)) continue;
-        taskTimeoutInFlightRef.current.add(key);
-        try {
-          const result = await researchApi.submitTaskResponse({
-            session_id: session._id,
-            task_id: taskId,
-            step_index: activeIdx,
-            selected_ids: [],
-            timed_out: true,
-          });
-          setTaskResponses((prev) => ({
-            ...prev,
-            [key]: {
-              selected_ids: result.selected_ids || [],
-              is_correct: !!result.is_correct,
-              result_status: result.result_status || 'incorrect',
-              timed_out: !!result.timed_out,
-              timeout_note: result.timeout_note || 'User konnte keine Angabe in definiertem Zeitrahmen treffen.',
-            },
-          }));
+      const clampedIndex = Math.min(Math.max(activeTaskIndex, 0), Math.max(tasks.length - 1, 0));
+      const task = tasks[clampedIndex];
+      if (!task) return;
+      const taskId = String(task._id);
+      if (taskEndedById[taskId]) return;
+      const steps = getTaskSteps(task);
+      const activeIdx = getActiveTaskStepIndex(task);
+      const activeStep = steps[activeIdx];
+      const limit = Number(activeStep?.time_limit_sec || 0);
+      if (limit <= 0) return;
+      const key = `${taskId}:${activeIdx}`;
+      if (taskResponses[key]) return;
+      const startedAt = Number(taskStepStartedAtByKey[key] || 0);
+      if (!startedAt) return;
+      const elapsedSec = Math.floor((nowMs - startedAt) / 1000);
+      if (elapsedSec < limit) return;
+      if (taskTimeoutInFlightRef.current.has(key)) return;
+      taskTimeoutInFlightRef.current.add(key);
+      try {
+        const result = await researchApi.submitTaskResponse({
+          session_id: session._id,
+          task_id: taskId,
+          step_index: activeIdx,
+          selected_ids: [],
+          timed_out: true,
+        });
+        setTaskResponses((prev) => ({
+          ...prev,
+          [key]: {
+            selected_ids: result.selected_ids || [],
+            is_correct: !!result.is_correct,
+            result_status: result.result_status || 'incorrect',
+            timed_out: !!result.timed_out,
+            timeout_note: result.timeout_note || 'User konnte keine Angabe in definiertem Zeitrahmen treffen.',
+          },
+        }));
 
-          if (activeIdx >= steps.length - 1) {
-            setTaskEndedById((prev) => ({ ...prev, [taskId]: true }));
-            setMessageType('error');
-            setMessage(`Zeitlimit erreicht: "${task.title}" wurde automatisch beendet.`);
-            if (!taskEndRedirectTimerRef.current) {
-              taskEndRedirectTimerRef.current = setTimeout(() => {
-                navigate('/');
-              }, 3000);
-            }
-          } else {
-            setTaskActiveStepById((prev) => ({ ...prev, [taskId]: activeIdx + 1 }));
-            setMessageType('error');
-            setMessage(`Zeitlimit erreicht: "${task.title}" springt zu Schritt ${activeIdx + 2}.`);
-          }
-        } catch (err) {
+        if (activeIdx >= steps.length - 1) {
+          setTaskEndedById((prev) => ({ ...prev, [taskId]: true }));
           setMessageType('error');
-          setMessage(err.message || 'Aufgaben-Timer konnte nicht gespeichert werden.');
-        } finally {
-          taskTimeoutInFlightRef.current.delete(key);
+          setMessage(`Zeitlimit erreicht: "${task.title}" wurde automatisch beendet.`);
+          if (!taskEndRedirectTimerRef.current) {
+            taskEndRedirectTimerRef.current = setTimeout(() => {
+              navigate('/');
+            }, 3000);
+          }
+        } else {
+          setTaskActiveStepById((prev) => ({ ...prev, [taskId]: activeIdx + 1 }));
+          setMessageType('error');
+          setMessage(`Zeitlimit erreicht: "${task.title}" springt zu Schritt ${activeIdx + 2}.`);
         }
+      } catch (err) {
+        setMessageType('error');
+        setMessage(err.message || 'Aufgaben-Timer konnte nicht gespeichert werden.');
+      } finally {
+        taskTimeoutInFlightRef.current.delete(key);
       }
     })();
-  }, [nowMs, session, tasks, taskResponses, taskStepStartedAtByKey, taskActiveStepById, taskEndedById]);
+  }, [nowMs, session, tasks, taskResponses, taskStepStartedAtByKey, taskActiveStepById, taskEndedById, activeTaskIndex, navigate]);
 
   useEffect(() => {
     if (!tasks.length) {
