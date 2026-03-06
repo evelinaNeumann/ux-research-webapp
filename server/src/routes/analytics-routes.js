@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { analyticsOverview, flattenExport } from '../services/analytics-service.js';
+import { analyticsOverview, flattenExport, resolveStudyScopeIds } from '../services/analytics-service.js';
 import { toCsv } from '../utils/csv.js';
 import { UserStudyProfile } from '../models/UserStudyProfile.js';
 import { Study } from '../models/Study.js';
@@ -810,7 +810,10 @@ function roleLabel(roleCategory, roleCustom) {
 
 async function loadPortraitInsights(studyId, filters = {}) {
   const study = await Study.findById(studyId, { name: 1 });
-  const profiles = await UserStudyProfile.find({ study_id: studyId })
+  const studyScopeIds = await resolveStudyScopeIds(studyId);
+  const profiles = await UserStudyProfile.find(
+    studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : { study_id: studyId }
+  )
     .sort({ completed_at: -1 });
 
   const filteredProfiles = profiles.filter((p) => {

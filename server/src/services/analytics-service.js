@@ -15,7 +15,6 @@ import mongoose from 'mongoose';
 
 function buildSessionMatch(filters = {}) {
   const match = {};
-  if (filters.studyId) match.study_id = filters.studyId;
   if (filters.userId) match.user_id = filters.userId;
   if (filters.dateFrom || filters.dateTo) {
     match.createdAt = {};
@@ -25,12 +24,18 @@ function buildSessionMatch(filters = {}) {
   return match;
 }
 
-function buildStudyMatch(studyId) {
-  if (!studyId) return { $exists: true };
-  if (mongoose.Types.ObjectId.isValid(studyId)) {
-    return new mongoose.Types.ObjectId(studyId);
-  }
-  return studyId;
+export async function resolveStudyScopeIds(studyId) {
+  if (!studyId) return [];
+  if (!mongoose.Types.ObjectId.isValid(studyId)) return [studyId];
+
+  const study = await Study.findById(studyId, { _id: 1, composed_sections: 1 }).lean();
+  if (!study) return [new mongoose.Types.ObjectId(studyId)];
+
+  const sectionIds = Array.isArray(study.composed_sections)
+    ? study.composed_sections.map((entry) => entry?.study_id).filter(Boolean)
+    : [];
+  const unique = [study._id, ...sectionIds].map((id) => String(id));
+  return Array.from(new Set(unique)).map((id) => new mongoose.Types.ObjectId(id));
 }
 
 function toSortedRows(obj, keyName = 'key') {
@@ -43,11 +48,11 @@ function hasProfileFilters(filters = {}) {
   return Boolean(filters.age || filters.role || filters.keyword);
 }
 
-async function resolveFilteredUserIds(filters = {}) {
+async function resolveFilteredUserIds(filters = {}, studyScopeIds = []) {
   if (!hasProfileFilters(filters)) return null;
 
   const match = {};
-  if (filters.studyId) match.study_id = buildStudyMatch(filters.studyId);
+  if (studyScopeIds.length > 0) match.study_id = { $in: studyScopeIds };
   if (filters.age) match.age_range = String(filters.age);
   if (filters.role) {
     const roleValue = String(filters.role);
@@ -69,8 +74,9 @@ async function resolveFilteredUserIds(filters = {}) {
 
 export async function analyticsOverview(filters = {}) {
   const sessionMatch = buildSessionMatch(filters);
-  const studyMatch = buildStudyMatch(filters.studyId);
-  const filteredUserIds = await resolveFilteredUserIds(filters);
+  const studyScopeIds = await resolveStudyScopeIds(filters.studyId);
+  if (studyScopeIds.length > 0) sessionMatch.study_id = { $in: studyScopeIds };
+  const filteredUserIds = await resolveFilteredUserIds(filters, studyScopeIds);
   if (filteredUserIds) {
     sessionMatch.user_id = { $in: filteredUserIds };
   }
@@ -95,10 +101,10 @@ export async function analyticsOverview(filters = {}) {
     Session.countDocuments({ ...sessionMatch, status: 'done' }),
   ]);
 
-  const answerMatch = filters.studyId ? { study_id: studyMatch } : {};
+  const answerMatch = studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {};
   if (filteredUserIds) answerMatch.user_id = { $in: filteredUserIds };
   const [questionDocs, answerDocs] = await Promise.all([
-    Question.find(filters.studyId ? { study_id: studyMatch } : {}, { _id: 1, text: 1 }).sort({ _id: 1 }).lean(),
+    Question.find(studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {}, { _id: 1, text: 1 }).sort({ _id: 1 }).lean(),
     Answer.aggregate([
       { $match: answerMatch },
       { $sort: { created_at: -1, _id: -1 } },
@@ -154,7 +160,7 @@ export async function analyticsOverview(filters = {}) {
     };
   });
 
-  const imageMatch = filters.studyId ? { study_id: studyMatch } : {};
+  const imageMatch = studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {};
   if (filteredUserIds) imageMatch.user_id = { $in: filteredUserIds };
   const imageAvg = await ImageRating.aggregate([
     { $match: imageMatch },
@@ -167,12 +173,12 @@ export async function analyticsOverview(filters = {}) {
     },
   ]);
 
-  const cardSortMatch = filters.studyId ? { study_id: studyMatch } : {};
+  const cardSortMatch = studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {};
   if (filteredUserIds) cardSortMatch.user_id = { $in: filteredUserIds };
   const cardsortCount = await CardSort.countDocuments(cardSortMatch);
   const [studyCards, cardSortColumnsTotal, latestCardSortBySession] = await Promise.all([
-    Card.find(filters.studyId ? { study_id: studyMatch } : {}, { _id: 1, label: 1 }).lean(),
-    CardSortColumn.countDocuments(filters.studyId ? { study_id: studyMatch, is_active: true } : { is_active: true }),
+    Card.find(studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {}, { _id: 1, label: 1 }).lean(),
+    CardSortColumn.countDocuments(studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds }, is_active: true } : { is_active: true }),
     CardSort.aggregate([
       { $match: cardSortMatch },
       { $sort: { created_at: -1, _id: -1 } },
@@ -273,17 +279,17 @@ export async function analyticsOverview(filters = {}) {
     },
   };
 
-  const taskMatch = filters.studyId ? { study_id: studyMatch } : {};
+  const taskMatch = studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {};
   if (filteredUserIds) taskMatch.user_id = { $in: filteredUserIds };
   const [imageAssetsTotal, imageAssets, taskDefs, taskResponses, imageTaskResponses, studyForImageTasks] = await Promise.all([
-    ImageAsset.countDocuments(filters.studyId ? { study_id: studyMatch } : {}),
-    ImageAsset.find(filters.studyId ? { study_id: studyMatch } : {}, { _id: 1, path: 1, alt_text: 1 }).lean(),
-    ResearchTask.find(filters.studyId ? { study_id: studyMatch } : {}, { _id: 1, title: 1, description: 1, steps: 1 })
+    ImageAsset.countDocuments(studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {}),
+    ImageAsset.find(studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {}, { _id: 1, path: 1, alt_text: 1 }).lean(),
+    ResearchTask.find(studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {}, { _id: 1, title: 1, description: 1, steps: 1 })
       .sort({ order_index: 1, _id: 1 })
       .lean(),
     TaskResponse.find(taskMatch, { task_id: 1, step_index: 1, is_correct: 1, timed_out: 1 }).lean(),
     ImageTaskResponse.find(taskMatch, { task_id: 1, task_type: 1, payload: 1, timed_out: 1 }).lean(),
-    filters.studyId ? Study.findById(studyMatch, { image_rating_tasks: 1 }).lean() : null,
+    studyScopeIds.length > 0 ? Study.find({ _id: { $in: studyScopeIds } }, { image_rating_tasks: 1 }).lean() : [],
   ]);
   const responsesByTaskStep = new Map();
   for (const row of taskResponses) {
@@ -330,9 +336,9 @@ export async function analyticsOverview(filters = {}) {
     tasks: taskItems,
   };
 
-  const imageTaskDefs = Array.isArray(studyForImageTasks?.image_rating_tasks)
-    ? [...studyForImageTasks.image_rating_tasks].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0))
-    : [];
+  const imageTaskDefs = (studyForImageTasks || [])
+    .flatMap((row) => (Array.isArray(row?.image_rating_tasks) ? row.image_rating_tasks : []))
+    .sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0));
   const imageAssetById = new Map((imageAssets || []).map((img) => [String(img._id), img]));
   const imageTaskResponsesByTask = new Map();
   for (const row of imageTaskResponses || []) {
