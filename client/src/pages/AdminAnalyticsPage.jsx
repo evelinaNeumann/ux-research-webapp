@@ -315,49 +315,6 @@ export function AdminAnalyticsPage() {
     lines.push(`Teilnahmen: ${sourceOverview.sessions_total ?? 0}`);
     lines.push(`Abgeschlossen: ${sourceOverview.sessions_done ?? 0}`);
     lines.push(`Abschlussrate: ${sourceOverview.completion_rate ?? 0}%`);
-    lines.push('');
-    lines.push('1. Interview');
-    if (!sourceOverview.questionnaire?.length) {
-      lines.push('Keine Interview-Daten vorhanden.');
-    } else {
-      sourceOverview.questionnaire.forEach((q, idx) => {
-        lines.push(`${idx + 1}. ${q.question_text || q._id}`);
-        if ((q.answers || []).length > 0) {
-          q.answers.forEach((answer) => lines.push(`- ${answer}`));
-        } else {
-          lines.push('- Keine Antworten vorhanden.');
-        }
-      });
-    }
-    lines.push('');
-    lines.push('2. Card Sorting');
-    lines.push(`Submissions gesamt: ${sourceOverview.card_sort_submissions ?? 0}`);
-    lines.push('');
-    lines.push('3. Bildauswertung');
-    if (!sourceOverview.image_rating?.length) {
-      lines.push('Keine Bildauswertungs-Daten vorhanden.');
-    } else {
-      sourceOverview.image_rating.forEach((row) => {
-        lines.push(`Bild ${String(row._id)}: Ø ${Number(row.avg || 0).toFixed(2)} (n=${row.n})`);
-      });
-    }
-    if ((sourceOverview.image_task_work?.tasks || []).length > 0) {
-      lines.push('Bild-Aufgaben:');
-      (sourceOverview.image_task_work?.tasks || []).forEach((task, idx) => {
-        lines.push(`${idx + 1}. ${task.title || task.task_id} (${task.type}) - Antworten: ${task.total ?? 0}`);
-      });
-    }
-    lines.push('');
-    lines.push('4. Aufgabenbearbeitung');
-    if (!(sourceOverview.task_work?.tasks || []).length) {
-      lines.push('Keine Aufgaben-Daten vorhanden.');
-    } else {
-      (sourceOverview.task_work?.tasks || []).forEach((task, idx) => {
-        lines.push(
-          `${idx + 1}. ${task.title}: gesamt ${task.total ?? 0}, korrekt ${task.correct ?? 0}, falsch geklickt ${task.incorrect_click ?? 0}, Zeit abgelaufen ${task.timed_out ?? 0}`
-        );
-      });
-    }
     return lines.join('\n');
   };
 
@@ -1010,8 +967,8 @@ export function AdminAnalyticsPage() {
                     </section>
 
                     <section className="qa-block">
-                      <p className="qa-question">Diagramm: Kartenhäufigkeit (Top)</p>
-                      {renderPieChart(
+                      <p className="qa-question">Balkendiagramm: Kartenhäufigkeit (Top)</p>
+                      {renderCountBars(
                         (overview.card_sort?.card_distribution || []).slice(0, 20),
                         (row) => row.card_label,
                         'Keine Kartenzuordnungen vorhanden.'
@@ -1025,7 +982,7 @@ export function AdminAnalyticsPage() {
                           {overview.card_sort.column_card_distribution.map((columnRow) => (
                             <article key={columnRow.column} className="qa-block qa-nested">
                               <p className="qa-question">{columnRow.column} <small>({columnRow.total})</small></p>
-                              {renderPieChart(
+                              {renderCountBars(
                                 columnRow.cards || [],
                                 (row) => row.card_label,
                                 'Keine Karten in dieser Spalte.'
@@ -1045,7 +1002,7 @@ export function AdminAnalyticsPage() {
                           {overview.card_sort.card_column_distribution.map((cardRow) => (
                             <article key={cardRow.card_label} className="qa-block qa-nested">
                               <p className="qa-question">{cardRow.card_label} <small>({cardRow.total})</small></p>
-                              {renderPieChart(
+                              {renderCountBars(
                                 cardRow.columns || [],
                                 (row) => row.column,
                                 'Keine Spaltenzuordnung für diese Card.'
@@ -1077,8 +1034,8 @@ export function AdminAnalyticsPage() {
                     </section>
 
                     <section className="qa-block modules-data-grid-full">
-                      <p className="qa-question">User-Ideen: Eigene Cards je Spalte</p>
-                      {renderPieChart(
+                      <p className="qa-question">Balkendiagramm: User-Ideen Eigene Cards je Spalte</p>
+                      {renderCountBars(
                         overview.card_sort?.user_idea?.custom_cards_by_column || [],
                         (row) => row.column,
                         'Keine benutzerdefinierten Karten-Spaltenzuordnungen vorhanden.'
