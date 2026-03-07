@@ -440,6 +440,14 @@
   gap: 0.55rem;
 }
 
+.report-interview-question {
+  font-weight: 700;
+}
+
+.report-interview-answer {
+  font-style: italic;
+}
+
 .report-image-task-grid {
   display: grid;
   gap: 0.7rem;

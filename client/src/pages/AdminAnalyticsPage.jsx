@@ -344,6 +344,11 @@ export function AdminAnalyticsPage() {
             .report-preview-header { font-weight: 700; }
             .report-preview-footer { font-size: 12px; color: #334155; }
             .report-preview-content { display: grid; gap: 10px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; overflow: visible; }
+            .qa-block { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; background: #fafbfe; }
+            .qa-nested { background: #fff; }
+            .qa-question { margin: 0 0 6px; font-weight: 600; color: #111827; }
+            .qa-answer-list { margin-top: 6px; display: grid; gap: 4px; }
+            .list-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 0; border-bottom: 1px solid #eef2f7; }
             .report-line { margin: 0; white-space: pre-wrap; }
             .report-diagram-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .report-diagram-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; }
@@ -363,6 +368,8 @@ export function AdminAnalyticsPage() {
             .portrait-card { border: 1px solid #e6ebf3; border-radius: 12px; padding: 8px; display: grid; gap: 4px; }
             .tag-wrap { display: flex; gap: 6px; flex-wrap: wrap; }
             .tag-chip { border: 1px solid #dbe7ff; border-radius: 999px; background: #eff6ff; color: #1e40af; padding: 2px 8px; font-size: 12px; }
+            .report-interview-question { font-weight: 700; }
+            .report-interview-answer { font-style: italic; }
             .dislike-eval-wrap { display: grid; gap: 8px; }
             .dislike-image-wrap { position: relative; border: 1px solid #dbe2ee; border-radius: 10px; overflow: hidden; background: #fff; max-width: 420px; }
             .dislike-image-wrap img { display: block; width: 100%; height: auto; }
@@ -730,12 +737,12 @@ export function AdminAnalyticsPage() {
                     <div className="report-interview-list">
                       {(overview.questionnaire || []).map((q) => (
                         <section key={`report-interview-${q._id}`} className="qa-block qa-nested">
-                          <p className="qa-question">{q.question_text || String(q._id)}</p>
+                          <p className="qa-question report-interview-question">{q.question_text || String(q._id)}</p>
                           {(q.answers || []).length > 0 ? (
                             <div className="qa-answer-list">
                               {q.answers.map((answer, idx) => (
                                 <div key={`report-interview-answer-${q._id}-${idx}`} className="list-row">
-                                  <span>{answer}</span>
+                                  <span className="report-interview-answer">{answer}</span>
                                   <small>#{idx + 1}</small>
                                 </div>
                               ))}
@@ -930,13 +937,13 @@ export function AdminAnalyticsPage() {
                   {overview.questionnaire?.length > 0 ? (
                     overview.questionnaire.map((q) => (
                       <div key={q._id} className="qa-block">
-                        <p className="qa-question">{q.question_text || String(q._id)}</p>
+                        <p className="qa-question report-interview-question">{q.question_text || String(q._id)}</p>
                         <small>Antworten gesamt: {q.n ?? 0}</small>
                         {(q.answers || []).length > 0 ? (
                           <div className="qa-answer-list">
                             {q.answers.map((answer, idx) => (
                               <div key={`${q._id}-${idx}`} className="list-row">
-                                <span>{answer}</span>
+                                <span className="report-interview-answer">{answer}</span>
                                 <small>#{idx + 1}</small>
                               </div>
                             ))}
