@@ -59,6 +59,9 @@ Die App ist ein lokales Research-System für Planung, Durchführung und Auswertu
   - globaler Filterblock
   - Studienmodule-Reiter
   - User Portraits + Profil-Daten-Auswertung
+  - PDF-Report-Vorschau/Editor mit A4-Seitenlayout inkl. sichtbarer Kopf-/Fußzeile
+  - Interview im Report: Fragen fett, Antworten kursiv
+  - Report-Cards werden seitenweise vollständig gehalten (kein Split über zwei Seiten)
   - PDF/JSON/CSV Exporte
 
 ## 6. Qualitätskontext (homogene Weiterentwicklung)

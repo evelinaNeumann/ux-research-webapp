@@ -88,6 +88,16 @@ Filter: `age`, `role`, `keyword`
 - Card Sorting im Report enthält zusätzlich `Card -> Spalten` Diagramme (Häufigkeit pro Card und Zielspalte).
 - Aufgaben-Reporttext unterscheidet explizit zwischen `falsch geklickt` und `Zeit abgelaufen`.
 
+### 7.4 PDF Report Vorschau/Editor (Frontend)
+- A4-optimierte Vorschau mit sichtbarer Seitenbreite (`210mm`) und A4-Printlayout.
+- Kopf- und Fußzeile sind sichtbar und im Editor frei bearbeitbar.
+- Kartenbasierte Blöcke (z. B. Portraits, Diagramm-Cards, Interview-Blöcke, Aufgaben-Blöcke) werden nicht über Seiten getrennt:
+  - `break-inside: avoid-page`
+  - `page-break-inside: avoid`
+- Interview-Darstellung im Report:
+  - Frage = fett
+  - Antwort = kursiv
+
 ## 8. Chart Payload
 Standardformat:
 - `chart_type`

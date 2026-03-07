@@ -66,6 +66,11 @@
 - Studienmodule: PDF/JSON.
 - Exporte übernehmen aktive Filter.
 - Aufgaben-Metriken inkl. `falsch geklickt` und `Zeit abgelaufen` in Studienmodule-Export.
+- PDF-Report Vorschau/Editor:
+  - A4-optimierte Seite (Breite/Höhe sichtbar),
+  - editierbare Kopf-/Fußzeile,
+  - Interview-Format im Report: Frage fett, Antwort kursiv,
+  - keine abgeschnittenen/gesplitteten Cards über Seitenumbrüche.
 
 ## UX/Frontend-Qualität
 - Eigene Komponenten + separates CSS.
