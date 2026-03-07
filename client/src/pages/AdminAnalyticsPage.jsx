@@ -803,38 +803,40 @@ export function AdminAnalyticsPage() {
                 <article className="report-diagram-card report-diagram-card-wide">
                   <p className="qa-question">Aufgaben: Task gesamt</p>
                   {(overview.task_work?.tasks || []).length ? (
-                    (overview.task_work?.tasks || []).map((task) => (
-                      <div key={`report-task-pie-${task.task_id}`} className="report-task-block">
-                        <small>{task.title}</small>
-                        {renderPieChart(
-                          [
-                            { label: 'Korrekt', count: Number(task.correct || 0) },
-                            { label: 'Falsch geklickt', count: Number(task.incorrect_click || 0) },
-                            { label: 'Zeit abgelaufen', count: Number(task.timed_out || 0) },
-                          ],
-                          (row) => row.label
-                        )}
-                        {(task.steps || []).length > 0 && (
-                          <div className="report-step-grid">
-                            {(task.steps || []).map((step) => (
-                              <div key={`report-task-step-${task.task_id}-${step.step_index}`} className="report-step-card">
-                                <small>
-                                  Schritt {Number(step.step_index || 0) + 1}: {step.prompt || '-'}
-                                </small>
-                                {renderPieChart(
-                                  [
-                                    { label: 'Korrekt', count: Number(step.correct || 0) },
-                                    { label: 'Falsch geklickt', count: Number(step.incorrect_click || 0) },
-                                    { label: 'Zeit abgelaufen', count: Number(step.timed_out || 0) },
-                                  ],
-                                  (row) => row.label
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))
+                    <div className="report-task-grid">
+                      {(overview.task_work?.tasks || []).map((task) => (
+                        <div key={`report-task-pie-${task.task_id}`} className="report-task-block">
+                          <small>{task.title}</small>
+                          {renderPieChart(
+                            [
+                              { label: 'Korrekt', count: Number(task.correct || 0) },
+                              { label: 'Falsch geklickt', count: Number(task.incorrect_click || 0) },
+                              { label: 'Zeit abgelaufen', count: Number(task.timed_out || 0) },
+                            ],
+                            (row) => row.label
+                          )}
+                          {(task.steps || []).length > 0 && (
+                            <div className="report-step-grid">
+                              {(task.steps || []).map((step) => (
+                                <div key={`report-task-step-${task.task_id}-${step.step_index}`} className="report-step-card">
+                                  <small>
+                                    Schritt {Number(step.step_index || 0) + 1}: {step.prompt || '-'}
+                                  </small>
+                                  {renderPieChart(
+                                    [
+                                      { label: 'Korrekt', count: Number(step.correct || 0) },
+                                      { label: 'Falsch geklickt', count: Number(step.incorrect_click || 0) },
+                                      { label: 'Zeit abgelaufen', count: Number(step.timed_out || 0) },
+                                    ],
+                                    (row) => row.label
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   ) : (
                     <p>Keine Aufgaben-Daten vorhanden.</p>
                   )}
