@@ -303,11 +303,15 @@
   width: min(100%, 1100px);
   margin: 0 auto;
   display: grid;
-  gap: 0.55rem;
+  gap: 1rem;
+}
+
+.questionnaire-row {
+  margin-bottom: 0.95rem;
 }
 
 .questionnaire-row span {
-  font-size: 1.92rem;
+  font-size: 1.54rem;
   line-height: 1.3;
   font-weight: 600;
   color: #374151;

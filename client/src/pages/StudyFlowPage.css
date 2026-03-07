@@ -16,6 +16,9 @@
 .study-flow-primary-action {
   margin-left: auto;
   min-width: 260px;
+  min-height: 58px;
+  padding: 0.9rem 1.15rem;
+  font-size: 1.05rem;
 }
 
 .success-text {

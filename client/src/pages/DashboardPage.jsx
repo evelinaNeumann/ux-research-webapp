@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { studyApi } from '../api/studies';
 import { sessionApi } from '../api/sessions';
@@ -47,9 +47,65 @@ export function DashboardPage({ user }) {
     return acc;
   }, {});
 
+  const mixedProgressByStudy = useMemo(() => {
+    const result = {};
+    const sessionsByFlow = sessions.reduce((acc, sessionItem) => {
+      const flowId = String(sessionItem.flow_study_id || '');
+      if (!flowId) return acc;
+      if (!acc[flowId]) acc[flowId] = [];
+      acc[flowId].push(sessionItem);
+      return acc;
+    }, {});
+
+    for (const studyItem of studies) {
+      const studyId = String(studyItem?._id || '');
+      const composed = Array.isArray(studyItem?.composed_sections) ? studyItem.composed_sections : [];
+      if (!studyId || composed.length === 0) continue;
+
+      const sectionIds = composed.map((section) => String(section?.study_id || '')).filter(Boolean);
+      if (sectionIds.length === 0) {
+        result[studyId] = { status: 'open', completedCount: 0, totalCount: 0, lastAccess: null };
+        continue;
+      }
+
+      const flowSessions = sessionsByFlow[studyId] || [];
+      const latestBySection = {};
+      for (const flowSession of flowSessions) {
+        const sectionId = String(flowSession.study_id || '');
+        if (!sectionId || latestBySection[sectionId]) continue;
+        latestBySection[sectionId] = flowSession;
+      }
+
+      const completedCount = sectionIds.filter((id) => latestBySection[id]?.status === 'done').length;
+      const hasInProgress = sectionIds.some((id) => latestBySection[id]?.status === 'in_progress');
+      const status = completedCount >= sectionIds.length ? 'done' : (hasInProgress || completedCount > 0 ? 'in_progress' : 'open');
+      const lastAccess = flowSessions
+        .map((row) => row.updatedAt || row.completed_at || row.started_at || null)
+        .find(Boolean) || null;
+
+      result[studyId] = {
+        status,
+        completedCount,
+        totalCount: sectionIds.length,
+        lastAccess,
+      };
+    }
+    return result;
+  }, [sessions, studies]);
+
   const isUser = user?.role === 'user';
-  const openStudies = studies.filter((s) => latestSessionByStudy[String(s._id)]?.status !== 'done');
+  const openStudies = studies.filter((s) => {
+    const studyId = String(s._id);
+    const isComposedStudy = Array.isArray(s?.composed_sections) && s.composed_sections.length > 0;
+    if (isComposedStudy) {
+      return mixedProgressByStudy[studyId]?.status !== 'done';
+    }
+    return latestSessionByStudy[studyId]?.status !== 'done';
+  });
   const sessionsToShow = isUser ? standaloneSessions.filter((s) => s.status === 'done') : sessions;
+  const completedMixedStudies = isUser
+    ? studies.filter((s) => mixedProgressByStudy[String(s._id)]?.status === 'done')
+    : [];
 
   const load = async () => {
     try {
@@ -273,11 +329,17 @@ export function DashboardPage({ user }) {
               {s.description && <small className="study-description">{s.description}</small>}
             </div>
             <button className="primary-btn" onClick={() => openStudy(s._id)}>
-              {latestSessionByStudy[String(s._id)]?.status === 'done'
-                ? 'Ansehen'
-                : latestSessionByStudy[String(s._id)]?.status === 'in_progress'
-                  ? 'Fortsetzen'
-                  : 'Start'}
+              {(Array.isArray(s?.composed_sections) && s.composed_sections.length > 0)
+                ? (mixedProgressByStudy[String(s._id)]?.status === 'done'
+                    ? 'Ansehen'
+                    : mixedProgressByStudy[String(s._id)]?.status === 'in_progress'
+                      ? 'Fortsetzen'
+                      : 'Start')
+                : (latestSessionByStudy[String(s._id)]?.status === 'done'
+                    ? 'Ansehen'
+                    : latestSessionByStudy[String(s._id)]?.status === 'in_progress'
+                      ? 'Fortsetzen'
+                      : 'Start')}
             </button>
           </div>
         ))}
@@ -287,7 +349,7 @@ export function DashboardPage({ user }) {
       </CardPanel>
 
       <CardPanel title={isUser ? 'Bereits bearbeitete Studien' : 'Meine Sessions'}>
-        {sessionsToShow.length === 0 && (
+        {sessionsToShow.length === 0 && completedMixedStudies.length === 0 && (
           <p>{isUser ? 'Noch keine bearbeiteten Studien vorhanden.' : 'Keine Sessions vorhanden.'}</p>
         )}
         {sessionsToShow.map((x) => (
@@ -308,6 +370,25 @@ export function DashboardPage({ user }) {
             </div>
             <button className="primary-btn" onClick={() => navigate(`/session/${x._id}`)}>
               {x.status === 'done' ? 'Ansehen' : 'Fortsetzen'}
+            </button>
+          </div>
+        ))}
+        {completedMixedStudies.map((studyItem) => (
+          <div key={`mixed-done-${studyItem._id}`} className="row-item">
+            <div className="session-info">
+              <strong>{studyItem.name}</strong>
+              <small>mixed • abgeschlossen</small>
+              {studyItem.description && <small className="study-description">{studyItem.description}</small>}
+              <small>
+                Fortschritt: {mixedProgressByStudy[String(studyItem._id)]?.completedCount || 0}/
+                {mixedProgressByStudy[String(studyItem._id)]?.totalCount || 0} Abschnitte
+              </small>
+              <small>
+                Letzter Zugriff: {formatDateTime(mixedProgressByStudy[String(studyItem._id)]?.lastAccess)}
+              </small>
+            </div>
+            <button className="primary-btn" onClick={() => navigate(`/study-flow/${studyItem._id}`)}>
+              Ansehen
             </button>
           </div>
         ))}

@@ -61,6 +61,11 @@ export function StudyFlowPage({ user }) {
     return null;
   }, [sections, latestSessionByStudy]);
 
+  const hasAnyCompletedSection = useMemo(
+    () => Object.values(latestSessionByStudy).some((s) => s?.status === 'done'),
+    [latestSessionByStudy]
+  );
+
   const sectionStatus = (sectionId) => {
     const session = latestSessionByStudy[String(sectionId)];
     if (!session) return { label: 'offen', tone: 'open' };
@@ -142,7 +147,7 @@ export function StudyFlowPage({ user }) {
               <button className="primary-btn study-flow-primary-action" type="button" onClick={continueToNext} disabled={starting}>
                 {starting
                   ? 'Bitte warten...'
-                  : nextSection.session?._id
+                  : (nextSection.session?._id || hasAnyCompletedSection)
                     ? 'Studienteilnahme fortsetzen'
                     : 'Studienteilnahme beginnen'}
               </button>
