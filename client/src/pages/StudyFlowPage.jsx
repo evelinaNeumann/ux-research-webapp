@@ -63,9 +63,9 @@ export function StudyFlowPage({ user }) {
 
   const sectionStatus = (sectionId) => {
     const session = latestSessionByStudy[String(sectionId)];
-    if (!session) return 'offen';
-    if (session.status === 'done') return 'abgeschlossen';
-    return 'in Bearbeitung';
+    if (!session) return { label: 'offen', tone: 'open' };
+    if (session.status === 'done') return { label: 'abgeschlossen', tone: 'done' };
+    return { label: 'in Bearbeitung', tone: 'progress' };
   };
 
   const gotoSectionSession = async (section, resumeSession = null) => {
@@ -111,32 +111,44 @@ export function StudyFlowPage({ user }) {
       <CardPanel title={`Mixed Studie: ${study?.name || 'Unbenannt'}`}>
         {error && <p className="error-text">{error}</p>}
         {study?.description && <p className="hint">{study.description}</p>}
+        {sections.length > 0 && (
+          <div className="study-flow-summary">
+            <strong>{sections.length} Abschnitte</strong>
+            <span>Die Teilnahme wird nacheinander geführt.</span>
+          </div>
+        )}
         {sections.length === 0 && (
           <p className="hint">Für diese Mixed Studie sind noch keine Studienabschnitte hinterlegt.</p>
         )}
-        {sections.map((section, idx) => (
-          <div key={section._id} className="row-item">
-            <div>
-              <strong>{idx + 1}. {section.name}</strong>
-              <small>{section.type} • {sectionStatus(section._id)}</small>
+        {sections.map((section, idx) => {
+          const status = sectionStatus(section._id);
+          return (
+            <div key={section._id} className="row-item">
+              <div>
+                <strong>{idx + 1}. {section.name}</strong>
+                <small>
+                  <span className={`status-pill ${status.tone}`}>{status.label}</span>
+                  <span>{section.type}</span>
+                </small>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {sections.length > 0 && (
           <div className="study-flow-actions">
+            <button className="ghost-btn" type="button" onClick={() => navigate('/')}>Zurück zum Dashboard</button>
             {nextSection ? (
-              <button className="primary-btn" type="button" onClick={continueToNext} disabled={starting}>
+              <button className="primary-btn study-flow-primary-action" type="button" onClick={continueToNext} disabled={starting}>
                 {starting
                   ? 'Bitte warten...'
                   : nextSection.session?._id
-                    ? 'Nächsten Abschnitt fortsetzen'
-                    : 'Nächsten Abschnitt starten'}
+                    ? 'Studienteilnahme fortsetzen'
+                    : 'Studienteilnahme beginnen'}
               </button>
             ) : (
               <p className="success-text">Alle Abschnitte dieser Mixed Studie wurden abgeschlossen.</p>
             )}
-            <button className="ghost-btn" type="button" onClick={() => navigate('/')}>Zurück zum Dashboard</button>
           </div>
         )}
       </CardPanel>
