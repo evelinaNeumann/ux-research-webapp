@@ -38,6 +38,8 @@ export function AdminAnalyticsPage() {
     image_rating: true,
     task_work: true,
   });
+  const [reportHeaderText, setReportHeaderText] = useState('Projektbericht Kurs: DLBMIUID02 - User Interface Design');
+  const [reportFooterText, setReportFooterText] = useState('Vertraulich - Nur für Projektzwecke');
   const reportPreviewRef = useRef(null);
 
   useEffect(() => {
@@ -325,7 +327,7 @@ export function AdminAnalyticsPage() {
 
   const openReportPrintPreview = () => {
     if (!reportPreviewRef.current) return;
-    const previewHtml = reportPreviewRef.current.innerHTML;
+    const previewHtml = reportPreviewRef.current.outerHTML;
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(`
@@ -337,8 +339,11 @@ export function AdminAnalyticsPage() {
             body { font-family: ${reportFontFamily}, sans-serif; font-size: ${reportFontSize}px; color: ${reportTextColor}; margin: 24px; background: #f5f7fb; font-weight: ${reportBold ? '700' : '400'}; font-style: ${reportItalic ? 'italic' : 'normal'}; }
             .print-toolbar { position: sticky; top: 0; z-index: 10; background: #fff; padding: 10px 0 12px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
             .print-btn { border: 1px solid #1d4ed8; background: #1d4ed8; color: #fff; border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
-            .report-preview-page { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; box-shadow: 0 8px 20px rgba(15,23,42,0.12); padding: 12mm; box-sizing: border-box; }
-            .report-preview-content { display: grid; gap: 10px; }
+            .report-preview-page { width: 210mm; height: 297mm; margin: 0 auto; background: #fff; box-shadow: 0 8px 20px rgba(15,23,42,0.12); padding: 10mm; box-sizing: border-box; display: grid; grid-template-rows: auto 1fr auto; gap: 8px; overflow: hidden; }
+            .report-preview-header, .report-preview-footer { border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 8px; background: #f8fafc; }
+            .report-preview-header { font-weight: 700; }
+            .report-preview-footer { font-size: 12px; color: #334155; }
+            .report-preview-content { display: grid; gap: 10px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; overflow: auto; }
             .report-line { margin: 0; white-space: pre-wrap; }
             .report-diagram-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .report-diagram-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; }
@@ -362,15 +367,15 @@ export function AdminAnalyticsPage() {
             .dislike-image-wrap { position: relative; border: 1px solid #dbe2ee; border-radius: 10px; overflow: hidden; background: #fff; max-width: 420px; }
             .dislike-image-wrap img { display: block; width: 100%; height: auto; }
             .dislike-mark-point { position: absolute; transform: translate(-50%, -50%); color: #dc2626; font-weight: 700; font-size: 14px; line-height: 1; text-shadow: 0 0 2px #fff; }
-            @media (max-width: 900px) { .report-preview-page { width: 100%; min-height: auto; padding: 16px; } .report-diagram-grid, .report-portrait-grid, .profile-agg-grid { grid-template-columns: 1fr; } }
-            @media print { body { background: #fff; margin: 0; } .print-toolbar { display: none; } .report-preview-page { width: auto; min-height: auto; margin: 0; box-shadow: none; padding: 10mm; } }
+            @media (max-width: 900px) { .report-preview-page { width: 100%; height: auto; min-height: 100vh; padding: 16px; } .report-diagram-grid, .report-portrait-grid, .profile-agg-grid { grid-template-columns: 1fr; } }
+            @media print { body { background: #fff; margin: 0; } .print-toolbar { display: none; } .report-preview-page { width: auto; height: auto; min-height: auto; margin: 0; box-shadow: none; padding: 10mm; overflow: visible; } .report-preview-content { overflow: visible; } }
           </style>
         </head>
         <body>
           <div class="print-toolbar">
             <button class="print-btn" onclick="window.print()">Report drucken</button>
           </div>
-          <div class="report-preview-page">${previewHtml}</div>
+          ${previewHtml}
         </body>
       </html>
     `);
@@ -619,6 +624,14 @@ export function AdminAnalyticsPage() {
               <span>Kursiv</span>
               <input type="checkbox" checked={reportItalic} onChange={(e) => setReportItalic(e.target.checked)} />
             </label>
+            <label className="form-field">
+              <span>Kopfzeile</span>
+              <input value={reportHeaderText} onChange={(e) => setReportHeaderText(e.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Fußzeile</span>
+              <input value={reportFooterText} onChange={(e) => setReportFooterText(e.target.value)} />
+            </label>
             <div className="analytics-actions">
               <button
                 type="button"
@@ -651,9 +664,9 @@ export function AdminAnalyticsPage() {
             />
           </label>
 
-          <div className="report-preview-page">
+          <div className="report-preview-page" ref={reportPreviewRef}>
+            <div className="report-preview-header">{reportHeaderText}</div>
             <div
-              ref={reportPreviewRef}
               className="report-preview-content"
               style={{
                 fontFamily: reportFontFamily,
@@ -738,7 +751,7 @@ export function AdminAnalyticsPage() {
                 </article>
               )}
               {reportIncludeCharts.card_sort && (
-                <article className="report-diagram-card">
+                <article className="report-diagram-card report-diagram-card-wide">
                   <p className="qa-question">Card Sorting: Zuordnungen je Spalte</p>
                   {renderPieChart(
                     overview.card_sort?.column_distribution || [],
@@ -748,7 +761,7 @@ export function AdminAnalyticsPage() {
                 </article>
               )}
               {reportIncludeCharts.image_rating && (
-                <article className="report-diagram-card">
+                <article className="report-diagram-card report-diagram-card-wide">
                   <p className="qa-question">Bildauswertung</p>
                   {renderCountBars(
                     (overview.image_rating || []).map((img) => ({ label: `Bild ${String(img._id)}`, count: Number((Number(img.avg || 0)).toFixed(2)) })),
@@ -758,23 +771,25 @@ export function AdminAnalyticsPage() {
                   {(overview.image_task_work?.tasks || []).length > 0 && (
                     <div className="qa-answer-list">
                       <p className="qa-question">Bild-Aufgaben</p>
-                      {(overview.image_task_work?.tasks || []).map((task) => (
-                        <section key={`report-image-task-${task.task_id}`} className="qa-block qa-nested">
-                          <p className="qa-question">{task.title || task.task_id} ({task.type})</p>
-                          {task.type === 'image_compare' &&
-                            renderPieChart(task.option_distribution || [], (row) => row.option, 'Keine Vergleichs-Daten vorhanden.')}
-                          {task.type === 'image_impression' &&
-                            renderPieChart((task.card_distribution || []).slice(0, 8), (row) => row.card, 'Keine Card-Auswahl-Daten vorhanden.')}
-                          {task.type === 'image_dislike_mark' && renderDislikeMarkPreview(task)}
-                          {task.type === 'image_questions' &&
-                            (task.questions || []).map((q, idx) => (
-                              <div key={`report-image-task-q-${task.task_id}-${idx}`}>
-                                <small>{q.question || `Frage ${idx + 1}`}</small>
-                                {renderCountBars(q.top_answers || [], (row) => row.answer, 'Keine Antwortdaten vorhanden.')}
-                              </div>
-                            ))}
-                        </section>
-                      ))}
+                      <div className="report-image-task-grid">
+                        {(overview.image_task_work?.tasks || []).map((task) => (
+                          <section key={`report-image-task-${task.task_id}`} className="qa-block qa-nested">
+                            <p className="qa-question">{task.title || task.task_id} ({task.type})</p>
+                            {task.type === 'image_compare' &&
+                              renderPieChart(task.option_distribution || [], (row) => row.option, 'Keine Vergleichs-Daten vorhanden.')}
+                            {task.type === 'image_impression' &&
+                              renderPieChart((task.card_distribution || []).slice(0, 8), (row) => row.card, 'Keine Card-Auswahl-Daten vorhanden.')}
+                            {task.type === 'image_dislike_mark' && renderDislikeMarkPreview(task)}
+                            {task.type === 'image_questions' &&
+                              (task.questions || []).map((q, idx) => (
+                                <div key={`report-image-task-q-${task.task_id}-${idx}`}>
+                                  <small>{q.question || `Frage ${idx + 1}`}</small>
+                                  {renderCountBars(q.top_answers || [], (row) => row.answer, 'Keine Antwortdaten vorhanden.')}
+                                </div>
+                              ))}
+                          </section>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </article>
@@ -824,6 +839,7 @@ export function AdminAnalyticsPage() {
               )}
               </div>
             </div>
+            <div className="report-preview-footer">{reportFooterText}</div>
           </div>
         </CardPanel>
       )}
