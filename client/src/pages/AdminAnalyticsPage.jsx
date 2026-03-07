@@ -710,7 +710,7 @@ export function AdminAnalyticsPage() {
 
               <div className="report-diagram-grid">
               {reportIncludeCharts.interview && (
-                <article className="report-diagram-card">
+                <article className="report-diagram-card report-diagram-card-wide">
                   <p className="qa-question">Interview: Fragen und Antworten</p>
                   {(overview.questionnaire || []).length > 0 ? (
                     <div className="report-interview-list">
