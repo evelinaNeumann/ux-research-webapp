@@ -357,12 +357,12 @@
   padding: 0.75rem;
   display: grid;
   gap: 0.45rem;
-  overflow: auto;
+  overflow: visible;
 }
 
 .report-preview-page {
   width: 210mm;
-  height: 297mm;
+  min-height: 297mm;
   max-width: 100%;
   margin: 0 auto;
   background: #fff;
@@ -371,9 +371,9 @@
   padding: 10mm;
   box-sizing: border-box;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto auto;
   gap: 0.55rem;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .report-preview-header,
@@ -538,6 +538,16 @@
   font-size: 1.1rem;
   line-height: 1;
   text-shadow: 0 0 2px #fff;
+}
+
+.portrait-card,
+.report-diagram-card,
+.qa-block,
+.report-step-card,
+.report-task-block,
+.list-row {
+  break-inside: avoid-page;
+  page-break-inside: avoid;
 }
 
 @media (max-width: 900px) {

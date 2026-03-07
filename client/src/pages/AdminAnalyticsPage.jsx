@@ -339,11 +339,11 @@ export function AdminAnalyticsPage() {
             body { font-family: ${reportFontFamily}, sans-serif; font-size: ${reportFontSize}px; color: ${reportTextColor}; margin: 24px; background: #f5f7fb; font-weight: ${reportBold ? '700' : '400'}; font-style: ${reportItalic ? 'italic' : 'normal'}; }
             .print-toolbar { position: sticky; top: 0; z-index: 10; background: #fff; padding: 10px 0 12px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
             .print-btn { border: 1px solid #1d4ed8; background: #1d4ed8; color: #fff; border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
-            .report-preview-page { width: 210mm; height: 297mm; margin: 0 auto; background: #fff; box-shadow: 0 8px 20px rgba(15,23,42,0.12); padding: 10mm; box-sizing: border-box; display: grid; grid-template-rows: auto 1fr auto; gap: 8px; overflow: hidden; }
+            .report-preview-page { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; box-shadow: 0 8px 20px rgba(15,23,42,0.12); padding: 10mm; box-sizing: border-box; display: grid; grid-template-rows: auto auto auto; gap: 8px; overflow: visible; }
             .report-preview-header, .report-preview-footer { border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 8px; background: #f8fafc; }
             .report-preview-header { font-weight: 700; }
             .report-preview-footer { font-size: 12px; color: #334155; }
-            .report-preview-content { display: grid; gap: 10px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; overflow: auto; }
+            .report-preview-content { display: grid; gap: 10px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; overflow: visible; }
             .report-line { margin: 0; white-space: pre-wrap; }
             .report-diagram-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .report-diagram-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; }
@@ -367,8 +367,9 @@ export function AdminAnalyticsPage() {
             .dislike-image-wrap { position: relative; border: 1px solid #dbe2ee; border-radius: 10px; overflow: hidden; background: #fff; max-width: 420px; }
             .dislike-image-wrap img { display: block; width: 100%; height: auto; }
             .dislike-mark-point { position: absolute; transform: translate(-50%, -50%); color: #dc2626; font-weight: 700; font-size: 14px; line-height: 1; text-shadow: 0 0 2px #fff; }
+            .portrait-card, .report-diagram-card, .qa-block, .report-step-card, .report-task-block, .list-row { break-inside: avoid-page; page-break-inside: avoid; }
             @media (max-width: 900px) { .report-preview-page { width: 100%; height: auto; min-height: 100vh; padding: 16px; } .report-diagram-grid, .report-portrait-grid, .profile-agg-grid { grid-template-columns: 1fr; } }
-            @media print { body { background: #fff; margin: 0; } .print-toolbar { display: none; } .report-preview-page { width: auto; height: auto; min-height: auto; margin: 0; box-shadow: none; padding: 10mm; overflow: visible; } .report-preview-content { overflow: visible; } }
+            @media print { @page { size: A4; margin: 10mm; } body { background: #fff; margin: 0; } .print-toolbar { display: none; } .report-preview-page { width: auto; height: auto; min-height: auto; margin: 0; box-shadow: none; padding: 0; overflow: visible; } .report-preview-content { overflow: visible; } .portrait-card, .report-diagram-card, .qa-block, .report-step-card, .report-task-block, .list-row { break-inside: avoid-page; page-break-inside: avoid; } }
           </style>
         </head>
         <body>
