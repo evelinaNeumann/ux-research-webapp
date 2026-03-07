@@ -427,6 +427,21 @@ export function SessionPage() {
   const imageModuleLabel = imageRatingTasks.length > 0 ? 'Bild-Aufgaben' : 'Bildbewertung';
   const moduleLabels = { ...MODULE_LABELS, image_rating: imageModuleLabel };
   const imagesById = Object.fromEntries((images || []).map((img) => [String(img._id), img]));
+  const activeImageTask = imageRatingTasks.length > 0
+    ? imageRatingTasks[Math.min(Math.max(activeImageTaskIndex, 0), imageRatingTasks.length - 1)]
+    : null;
+  const activeImageTaskId = String(activeImageTask?.task_id || '');
+  const activeImageTaskResponse = activeImageTaskId ? (imageTaskResponses[activeImageTaskId]?.payload || {}) : {};
+  const activeImageSelectedCardsCount = Array.isArray(activeImageTaskResponse.selected_cards)
+    ? activeImageTaskResponse.selected_cards.length
+    : 0;
+  const shouldShowImageSaveButton = !isReadOnly && (
+    imageRatingTasks.length === 0
+    || !activeImageTask
+    || activeImageTask.type !== 'image_impression'
+    || !!imageTaskResponses[activeImageTaskId]?.timed_out
+    || activeImageSelectedCardsCount > 0
+  );
 
   useEffect(() => {
     if (!imageRatingTasks.length) {
@@ -1084,13 +1099,15 @@ export function SessionPage() {
             </div>
           )}
           {!isReadOnly && (
-            <button
-              type="button"
-              className={`primary-btn ${isMixedFlowSection ? 'session-save-btn' : ''}`}
-              onClick={saveTaskWorkProgress}
-            >
-              Antworten speichern
-            </button>
+            <div className="save-action-row">
+              <button
+                type="button"
+                className="primary-btn session-save-btn"
+                onClick={saveTaskWorkProgress}
+              >
+                Antworten speichern
+              </button>
+            </div>
           )}
         </CardPanel>
       )}
@@ -1110,9 +1127,11 @@ export function SessionPage() {
               </label>
             ))}
             {!isReadOnly && (
-              <button className={`primary-btn ${isMixedFlowSection ? 'session-save-btn' : ''}`} onClick={saveQuestionnaire}>
-                Antworten speichern
-              </button>
+              <div className="save-action-row">
+                <button className="primary-btn session-save-btn" onClick={saveQuestionnaire}>
+                  Antworten speichern
+                </button>
+              </div>
             )}
           </div>
         </CardPanel>
@@ -1305,9 +1324,11 @@ export function SessionPage() {
               </>
             )}
             {!isReadOnly && (
-              <button className={`primary-btn ${isMixedFlowSection ? 'session-save-btn' : ''}`} onClick={saveCardSort}>
-                Antworten speichern
-              </button>
+              <div className="save-action-row">
+                <button className="primary-btn session-save-btn" onClick={saveCardSort}>
+                  Antworten speichern
+                </button>
+              </div>
             )}
           </div>
         </CardPanel>
@@ -1603,10 +1624,9 @@ export function SessionPage() {
               ))}
             </>
           )}
-          {!isReadOnly && (
-            <div className="image-save-row">
-              <div />
-              <button className={`primary-btn ${isMixedFlowSection ? 'session-save-btn' : ''}`} onClick={saveImageRatings}>
+          {shouldShowImageSaveButton && (
+            <div className="save-action-row">
+              <button className="primary-btn session-save-btn" onClick={saveImageRatings}>
                 Antworten speichern
               </button>
             </div>

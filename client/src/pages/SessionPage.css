@@ -346,10 +346,21 @@
 }
 
 .session-save-btn {
-  min-height: 56px;
-  font-size: 1.1rem;
+  width: 280px;
+  min-height: 58px;
+  font-size: 1.05rem;
   font-weight: 700;
   padding: 0.75rem 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.save-action-row {
+  margin-top: 0.95rem;
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
 }
 
 .chip-list {
@@ -465,16 +476,6 @@ button.chip-item {
   align-items: center;
   gap: 0.45rem;
   margin: 0.45rem 0 0.3rem;
-}
-
-.image-save-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 1rem;
-}
-
-.image-save-row .primary-btn {
-  justify-self: end;
 }
 
 .image-task-user-list {
@@ -736,12 +737,12 @@ button.chip-item {
     width: 100%;
   }
 
-  .image-save-row {
-    grid-template-columns: 1fr;
+  .save-action-row {
+    justify-content: stretch;
   }
 
-  .image-save-row .primary-btn {
-    justify-self: stretch;
+  .session-save-btn {
+    width: 100%;
   }
 
   .image-compare-row {

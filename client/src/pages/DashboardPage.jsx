@@ -30,6 +30,7 @@ export function DashboardPage({ user }) {
   const [studies, setStudies] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [sessionMeta, setSessionMeta] = useState({});
+  const [mixedSectionIdsByStudy, setMixedSectionIdsByStudy] = useState({});
   const [missingProfiles, setMissingProfiles] = useState([]);
   const [error, setError] = useState('');
   const [briefingState, setBriefingState] = useState({
@@ -62,7 +63,10 @@ export function DashboardPage({ user }) {
       const composed = Array.isArray(studyItem?.composed_sections) ? studyItem.composed_sections : [];
       if (!studyId || composed.length === 0) continue;
 
-      const sectionIds = composed.map((section) => String(section?.study_id || '')).filter(Boolean);
+      const resolvedSectionIds = mixedSectionIdsByStudy[studyId];
+      const sectionIds = Array.isArray(resolvedSectionIds) && resolvedSectionIds.length > 0
+        ? resolvedSectionIds
+        : composed.map((section) => String(section?.study_id || '')).filter(Boolean);
       if (sectionIds.length === 0) {
         result[studyId] = { status: 'open', completedCount: 0, totalCount: 0, lastAccess: null };
         continue;
@@ -91,7 +95,7 @@ export function DashboardPage({ user }) {
       };
     }
     return result;
-  }, [sessions, studies]);
+  }, [sessions, studies, mixedSectionIdsByStudy]);
 
   const isUser = user?.role === 'user';
   const openStudies = studies.filter((s) => {
@@ -114,8 +118,26 @@ export function DashboardPage({ user }) {
       const allowedStudyIds = new Set(allStudies.map((s) => String(s._id)));
       const allSessions = (sessionsRes.items || []).filter((s) => allowedStudyIds.has(String(s.study_id)));
       const standaloneAllSessions = allSessions.filter((s) => !s.flow_study_id);
+      const mixedStudies = allStudies.filter(
+        (studyItem) => Array.isArray(studyItem?.composed_sections) && studyItem.composed_sections.length > 0
+      );
+      const composedSectionResults = await Promise.allSettled(
+        mixedStudies.map(async (studyItem) => {
+          const response = await studyApi.getComposedSections(studyItem._id);
+          const sectionIds = Array.isArray(response?.sections)
+            ? response.sections.map((section) => String(section?._id || '')).filter(Boolean)
+            : [];
+          return [String(studyItem._id), sectionIds];
+        })
+      );
+      const resolvedMixedSectionIdsByStudy = Object.fromEntries(
+        composedSectionResults
+          .filter((result) => result.status === 'fulfilled')
+          .map((result) => result.value)
+      );
       setStudies(allStudies);
       setSessions(allSessions);
+      setMixedSectionIdsByStudy(resolvedMixedSectionIdsByStudy);
       await enrichSessionMeta(user?.role === 'user' ? standaloneAllSessions : allSessions, allStudies);
 
       if (user?.role === 'user') {
