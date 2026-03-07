@@ -443,7 +443,15 @@
   gap: 0.55rem;
   align-content: start;
   overflow: hidden;
-  min-height: 152px;
+  height: 186px;
+}
+
+.report-step-card > small:first-child {
+  min-height: 56px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .report-step-card .pie-chart,
