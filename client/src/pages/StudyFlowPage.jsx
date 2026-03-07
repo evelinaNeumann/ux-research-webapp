@@ -42,13 +42,14 @@ export function StudyFlowPage({ user }) {
 
   const latestSessionByStudy = useMemo(() => {
     const map = {};
-    for (const s of sessions) {
+    const flowScopedSessions = sessions.filter((s) => String(s.flow_study_id || '') === String(studyId));
+    for (const s of flowScopedSessions) {
       const key = String(s.study_id || '');
       if (!key || map[key]) continue;
       map[key] = s;
     }
     return map;
-  }, [sessions]);
+  }, [sessions, studyId]);
 
   const nextSection = useMemo(() => {
     for (const section of sections) {

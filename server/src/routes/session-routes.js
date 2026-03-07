@@ -118,29 +118,42 @@ function isCompleteProfileForSession(profile, profileCardCount) {
 router.post('/', async (req, res, next) => {
   try {
     const { study_id, flow_study_id } = req.body;
+    const flowStudyId = String(flow_study_id || '').trim();
+    const flowSessionScope = flowStudyId ? { flow_study_id: flowStudyId } : { flow_study_id: null };
     if (!study_id) throw badRequest('study_id required');
 
     const study = await Study.findById(study_id);
     if (!study) throw notFound('study not found');
     if (req.auth.role !== 'admin') {
-      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub, { flowStudyId: flow_study_id });
+      const hasAccess = await hasStudyAccessForUser(study, req.auth.sub, { flowStudyId });
       if (!hasAccess) throw forbidden('study not assigned to user');
 
       const { profile, profileCardCount } = await resolveProfileForSessionStart(study, req.auth.sub);
       if (!isCompleteProfileForSession(profile, profileCardCount)) throw badRequest('profile setup required');
     }
 
-    const existing = await Session.findOne({ user_id: req.auth.sub, study_id, status: 'in_progress' }).sort({ createdAt: -1 });
+    const existing = await Session.findOne({
+      user_id: req.auth.sub,
+      study_id,
+      status: 'in_progress',
+      ...flowSessionScope,
+    }).sort({ createdAt: -1 });
     if (existing) return res.status(200).json(existing);
 
     if (req.auth.role !== 'admin') {
-      const doneSession = await Session.findOne({ user_id: req.auth.sub, study_id, status: 'done' }).sort({ completed_at: -1 });
+      const doneSession = await Session.findOne({
+        user_id: req.auth.sub,
+        study_id,
+        status: 'done',
+        ...flowSessionScope,
+      }).sort({ completed_at: -1 });
       if (doneSession) throw forbidden('study already completed');
     }
 
     const item = await Session.create({
       user_id: req.auth.sub,
       study_id,
+      flow_study_id: flowStudyId || null,
       study_version: study.version,
       module_type: study.type,
       current_module: (study.module_order?.[0] || defaultModulesForStudy(study)[0] || 'task_work'),

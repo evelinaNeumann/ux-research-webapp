@@ -38,6 +38,28 @@ export async function resolveStudyScopeIds(studyId) {
   return Array.from(new Set(unique)).map((id) => new mongoose.Types.ObjectId(id));
 }
 
+async function resolveAnalyticsScope(studyId) {
+  if (!studyId) return { studyScopeIds: [], mixedFlowStudyId: null };
+  if (!mongoose.Types.ObjectId.isValid(studyId)) {
+    return { studyScopeIds: [studyId], mixedFlowStudyId: null };
+  }
+
+  const study = await Study.findById(studyId, { _id: 1, composed_sections: 1 }).lean();
+  if (!study) return { studyScopeIds: [new mongoose.Types.ObjectId(studyId)], mixedFlowStudyId: null };
+
+  const sectionIds = Array.isArray(study.composed_sections)
+    ? study.composed_sections.map((entry) => entry?.study_id).filter(Boolean)
+    : [];
+  if (sectionIds.length === 0) {
+    return { studyScopeIds: [study._id], mixedFlowStudyId: null };
+  }
+
+  return {
+    studyScopeIds: Array.from(new Set(sectionIds.map((id) => String(id)))).map((id) => new mongoose.Types.ObjectId(id)),
+    mixedFlowStudyId: study._id,
+  };
+}
+
 function toSortedRows(obj, keyName = 'key') {
   return Object.entries(obj)
     .map(([key, count]) => ({ [keyName]: key, count }))
@@ -74,8 +96,9 @@ async function resolveFilteredUserIds(filters = {}, studyScopeIds = []) {
 
 export async function analyticsOverview(filters = {}) {
   const sessionMatch = buildSessionMatch(filters);
-  const studyScopeIds = await resolveStudyScopeIds(filters.studyId);
+  const { studyScopeIds, mixedFlowStudyId } = await resolveAnalyticsScope(filters.studyId);
   if (studyScopeIds.length > 0) sessionMatch.study_id = { $in: studyScopeIds };
+  if (mixedFlowStudyId) sessionMatch.flow_study_id = mixedFlowStudyId;
   const filteredUserIds = await resolveFilteredUserIds(filters, studyScopeIds);
   if (filteredUserIds) {
     sessionMatch.user_id = { $in: filteredUserIds };
@@ -96,12 +119,19 @@ export async function analyticsOverview(filters = {}) {
       },
     };
   }
+
+  const scopedSessions = mixedFlowStudyId
+    ? await Session.find(sessionMatch, { _id: 1 }).lean()
+    : [];
+  const scopedSessionIds = scopedSessions.map((row) => row._id);
+
   const [sessionsTotal, sessionsDone] = await Promise.all([
     Session.countDocuments(sessionMatch),
     Session.countDocuments({ ...sessionMatch, status: 'done' }),
   ]);
 
   const answerMatch = studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {};
+  if (mixedFlowStudyId) answerMatch.session_id = { $in: scopedSessionIds };
   if (filteredUserIds) answerMatch.user_id = { $in: filteredUserIds };
   const [questionDocs, answerDocs] = await Promise.all([
     Question.find(studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {}, { _id: 1, text: 1 }).sort({ _id: 1 }).lean(),
@@ -161,6 +191,7 @@ export async function analyticsOverview(filters = {}) {
   });
 
   const imageMatch = studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {};
+  if (mixedFlowStudyId) imageMatch.session_id = { $in: scopedSessionIds };
   if (filteredUserIds) imageMatch.user_id = { $in: filteredUserIds };
   const imageAvg = await ImageRating.aggregate([
     { $match: imageMatch },
@@ -174,6 +205,7 @@ export async function analyticsOverview(filters = {}) {
   ]);
 
   const cardSortMatch = studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {};
+  if (mixedFlowStudyId) cardSortMatch.session_id = { $in: scopedSessionIds };
   if (filteredUserIds) cardSortMatch.user_id = { $in: filteredUserIds };
   const cardsortCount = await CardSort.countDocuments(cardSortMatch);
   const [studyCards, cardSortColumnsTotal, latestCardSortBySession] = await Promise.all([
@@ -280,6 +312,7 @@ export async function analyticsOverview(filters = {}) {
   };
 
   const taskMatch = studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {};
+  if (mixedFlowStudyId) taskMatch.session_id = { $in: scopedSessionIds };
   if (filteredUserIds) taskMatch.user_id = { $in: filteredUserIds };
   const [imageAssetsTotal, imageAssets, taskDefs, taskResponses, imageTaskResponses, studyForImageTasks] = await Promise.all([
     ImageAsset.countDocuments(studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : {}),

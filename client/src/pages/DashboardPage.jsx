@@ -39,7 +39,9 @@ export function DashboardPage({ user }) {
   });
   const [briefingLoading, setBriefingLoading] = useState(false);
 
-  const latestSessionByStudy = sessions.reduce((acc, s) => {
+  const standaloneSessions = sessions.filter((s) => !s.flow_study_id);
+
+  const latestSessionByStudy = standaloneSessions.reduce((acc, s) => {
     const key = String(s.study_id);
     if (!acc[key]) acc[key] = s;
     return acc;
@@ -47,7 +49,7 @@ export function DashboardPage({ user }) {
 
   const isUser = user?.role === 'user';
   const openStudies = studies.filter((s) => latestSessionByStudy[String(s._id)]?.status !== 'done');
-  const sessionsToShow = isUser ? sessions.filter((s) => s.status === 'done') : sessions;
+  const sessionsToShow = isUser ? standaloneSessions.filter((s) => s.status === 'done') : sessions;
 
   const load = async () => {
     try {
@@ -55,9 +57,10 @@ export function DashboardPage({ user }) {
       const allStudies = studiesRes.items || [];
       const allowedStudyIds = new Set(allStudies.map((s) => String(s._id)));
       const allSessions = (sessionsRes.items || []).filter((s) => allowedStudyIds.has(String(s.study_id)));
+      const standaloneAllSessions = allSessions.filter((s) => !s.flow_study_id);
       setStudies(allStudies);
       setSessions(allSessions);
-      await enrichSessionMeta(allSessions, allStudies);
+      await enrichSessionMeta(user?.role === 'user' ? standaloneAllSessions : allSessions, allStudies);
 
       if (user?.role === 'user') {
         const studiesNeedingProfile = allStudies.filter(
