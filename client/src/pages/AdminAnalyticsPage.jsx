@@ -321,7 +321,12 @@ export function AdminAnalyticsPage() {
       lines.push('Keine Interview-Daten vorhanden.');
     } else {
       sourceOverview.questionnaire.forEach((q, idx) => {
-        lines.push(`${idx + 1}. ${q.question_text || q._id} (n=${q.n ?? 0})`);
+        lines.push(`${idx + 1}. ${q.question_text || q._id}`);
+        if ((q.answers || []).length > 0) {
+          q.answers.forEach((answer) => lines.push(`- ${answer}`));
+        } else {
+          lines.push('- Keine Antworten vorhanden.');
+        }
       });
     }
     lines.push('');
@@ -749,11 +754,29 @@ export function AdminAnalyticsPage() {
               <div className="report-diagram-grid">
               {reportIncludeCharts.interview && (
                 <article className="report-diagram-card">
-                  <p className="qa-question">Interview Antworten je Frage</p>
-                  {renderCountBars(
-                    (overview.questionnaire || []).map((q) => ({ label: q.question_text || String(q._id), count: q.n || 0 })),
-                    (row) => row.label,
-                    'Keine Interview-Daten vorhanden.'
+                  <p className="qa-question">Interview: Fragen und Antworten</p>
+                  {(overview.questionnaire || []).length > 0 ? (
+                    <div className="report-interview-list">
+                      {(overview.questionnaire || []).map((q) => (
+                        <section key={`report-interview-${q._id}`} className="qa-block qa-nested">
+                          <p className="qa-question">{q.question_text || String(q._id)}</p>
+                          {(q.answers || []).length > 0 ? (
+                            <div className="qa-answer-list">
+                              {q.answers.map((answer, idx) => (
+                                <div key={`report-interview-answer-${q._id}-${idx}`} className="list-row">
+                                  <span>{answer}</span>
+                                  <small>#{idx + 1}</small>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p>Keine Antworten vorhanden.</p>
+                          )}
+                        </section>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>Keine Interview-Daten vorhanden.</p>
                   )}
                 </article>
               )}

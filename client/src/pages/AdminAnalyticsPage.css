@@ -414,6 +414,11 @@
   align-items: stretch;
 }
 
+.report-interview-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
 .report-task-block > small:first-child {
   font-weight: 600;
 }
