@@ -39,6 +39,13 @@
   margin-top: 0.45rem;
 }
 
+.modules-a4-wrap {
+  width: min(100%, 210mm);
+  margin: 0 auto;
+  display: grid;
+  gap: 0.75rem;
+}
+
 .module-tabs {
   display: flex;
   gap: 0.5rem;

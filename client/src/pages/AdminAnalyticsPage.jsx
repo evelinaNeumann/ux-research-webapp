@@ -614,7 +614,7 @@ export function AdminAnalyticsPage() {
                   {renderDistributionBars(filteredAggregates.roles || [], (key) => roleLabel(key, ''))}
                 </div>
                 <div>
-                  <h4>Wichtige Wörter (Top)</h4>
+                  <h4>Top Prioritäten</h4>
                   {renderDistributionBars(filteredAggregates.key_points || [], (key) => key)}
                 </div>
               </div>
@@ -735,7 +735,7 @@ export function AdminAnalyticsPage() {
                           {renderDistributionBars(filteredAggregates.roles || [], (key) => roleLabel(key, ''))}
                         </div>
                         <div>
-                          <h4>Wichtige Wörter (Top)</h4>
+                          <h4>Top Prioritäten</h4>
                           {renderDistributionBars(filteredAggregates.key_points || [], (key) => key)}
                         </div>
                       </div>
@@ -858,7 +858,7 @@ export function AdminAnalyticsPage() {
             </button>
           </div>
           {modulesOpen && (
-            <>
+            <div className="modules-a4-wrap">
               <div className="modules-top-row">
                 <div className="module-tabs">
                   {hasInterviewTab && (
@@ -1177,7 +1177,7 @@ export function AdminAnalyticsPage() {
                 </div>
               )}
               {!visibleTabs.length && <p>Für diese Studie sind keine Studienmodule hinterlegt.</p>}
-            </>
+            </div>
           )}
         </CardPanel>
       )}

@@ -106,7 +106,7 @@ function toPdfEntries(report) {
       );
       push(`Alter: ${item.age_range || '-'}`, { size: 10, indent: 16 });
       push(`Rolle: ${roleLabel(item.role_category, item.role_custom)}`, { size: 10, indent: 16 });
-      push(`Wichtige Wörter: ${(item.key_points || []).join(', ') || '-'}`, { size: 10, indent: 16, wrap: true });
+      push(`Top Prioritäten: ${(item.key_points || []).join(', ') || '-'}`, { size: 10, indent: 16, wrap: true });
       push(`Erfasst am: ${item.completed_at ? new Date(item.completed_at).toLocaleString('de-DE') : '-'}`, { size: 10, indent: 16 });
       spacer(4);
     });
@@ -133,7 +133,7 @@ function toPdfEntries(report) {
   }
   spacer(4);
 
-  push('2.3 Wichtigste Wörter (Top)', { bold: true, size: 11 });
+  push('2.3 Top Prioritäten', { bold: true, size: 11 });
   if (!report.aggregates.key_points.length) {
     push('Keine Daten vorhanden.', { size: 10, indent: 16 });
   } else {
