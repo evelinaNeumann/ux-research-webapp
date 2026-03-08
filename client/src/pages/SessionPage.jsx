@@ -386,12 +386,18 @@ export function SessionPage() {
 
         if (activeIdx >= steps.length - 1) {
           setTaskEndedById((prev) => ({ ...prev, [taskId]: true }));
-          setMessageType('error');
-          setMessage(`Zeitlimit erreicht: "${task.title}" wurde automatisch beendet.`);
-          if (!taskEndRedirectTimerRef.current) {
-            taskEndRedirectTimerRef.current = setTimeout(() => {
-              navigate('/');
-            }, 3000);
+          if (clampedIndex < tasks.length - 1) {
+            setActiveTaskIndex(clampedIndex + 1);
+            setMessageType('error');
+            setMessage(`Zeitlimit erreicht: "${task.title}" beendet. Nächste Aufgabe wurde geöffnet.`);
+          } else {
+            setMessageType('error');
+            setMessage(`Zeitlimit erreicht: "${task.title}" wurde automatisch beendet.`);
+            if (!taskEndRedirectTimerRef.current) {
+              taskEndRedirectTimerRef.current = setTimeout(() => {
+                navigate(flowStudyId ? `/study-flow/${flowStudyId}` : '/');
+              }, 3000);
+            }
           }
         } else {
           setTaskActiveStepById((prev) => ({ ...prev, [taskId]: activeIdx + 1 }));
@@ -405,7 +411,7 @@ export function SessionPage() {
         taskTimeoutInFlightRef.current.delete(key);
       }
     })();
-  }, [nowMs, session, tasks, taskResponses, taskStepStartedAtByKey, taskActiveStepById, taskEndedById, activeTaskIndex, navigate]);
+  }, [nowMs, session, tasks, taskResponses, taskStepStartedAtByKey, taskActiveStepById, taskEndedById, activeTaskIndex, navigate, flowStudyId]);
 
   useEffect(() => {
     if (!tasks.length) {
