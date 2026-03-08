@@ -6,6 +6,19 @@ import { CardPanel } from '../components/CardPanel';
 import { FormField } from '../components/FormField';
 import './AdminPage.css';
 
+const EMPTY_IMAGE_TASK_DRAFT = {
+  type: 'image_questions',
+  title: '',
+  description: '',
+  duration_sec: '5',
+  max_select: '5',
+  max_marks: '3',
+  cards_text: '',
+  questions_text: '',
+  image_id_a: '',
+  image_id_b: '',
+};
+
 export function AdminPage() {
   const [studies, setStudies] = useState([]);
   const [users, setUsers] = useState([]);
@@ -50,18 +63,8 @@ export function AdminPage() {
   const [imageCardPoolInput, setImageCardPoolInput] = useState('');
   const [imageCardPoolEditMode, setImageCardPoolEditMode] = useState(false);
   const [imageCardPoolSourceStudyId, setImageCardPoolSourceStudyId] = useState('');
-  const [imageTaskDraft, setImageTaskDraft] = useState({
-    type: 'image_questions',
-    title: '',
-    description: '',
-    duration_sec: '5',
-    max_select: '5',
-    max_marks: '3',
-    cards_text: '',
-    questions_text: '',
-    image_id_a: '',
-    image_id_b: '',
-  });
+  const [imageTaskDraft, setImageTaskDraft] = useState(EMPTY_IMAGE_TASK_DRAFT);
+  const [imageTaskEditId, setImageTaskEditId] = useState('');
   const [imageTaskDragIndex, setImageTaskDragIndex] = useState(-1);
   const [profileCardLabel, setProfileCardLabel] = useState('');
   const [items, setItems] = useState({ questions: [], cards: [], tasks: [], images: [] });
@@ -183,18 +186,8 @@ export function AdminPage() {
     setImageCardPoolInput('');
     setImageCardPoolEditMode(false);
     setImageCardPoolSourceStudyId('');
-    setImageTaskDraft({
-      type: 'image_questions',
-      title: '',
-      description: '',
-      duration_sec: '5',
-      max_select: '5',
-      max_marks: '3',
-      cards_text: '',
-      questions_text: '',
-      image_id_a: '',
-      image_id_b: '',
-    });
+    setImageTaskDraft(EMPTY_IMAGE_TASK_DRAFT);
+    setImageTaskEditId('');
     setBriefFile(null);
   }, [selectedStudyData]);
 
@@ -214,6 +207,10 @@ export function AdminPage() {
         (a, b) => Number(a.order_index || 0) - Number(b.order_index || 0)
       ),
     [selectedStudyData]
+  );
+  const editingImageTask = useMemo(
+    () => imageTaskItems.find((task) => String(task.task_id) === String(imageTaskEditId)) || null,
+    [imageTaskItems, imageTaskEditId]
   );
   const imageCardPool = useMemo(
     () => (Array.isArray(selectedStudyData?.image_rating_card_pool) ? selectedStudyData.image_rating_card_pool : []),
@@ -244,6 +241,28 @@ export function AdminPage() {
     const isPdf = file.type === 'application/pdf' || name.endsWith('.pdf');
     const isHtml = file.type === 'text/html' || file.type === 'application/xhtml+xml' || name.endsWith('.html') || name.endsWith('.htm');
     return isPdf || isHtml;
+  };
+
+  const startImageTaskEdit = (task) => {
+    const imageIds = Array.isArray(task?.image_ids) ? task.image_ids : [];
+    setImageTaskEditId(String(task?.task_id || ''));
+    setImageTaskDraft({
+      type: String(task?.type || 'image_questions'),
+      title: String(task?.title || ''),
+      description: String(task?.description || ''),
+      duration_sec: String(task?.duration_sec ?? 5),
+      max_select: String(task?.max_select ?? 5),
+      max_marks: String(task?.max_marks ?? 3),
+      cards_text: Array.isArray(task?.cards) ? task.cards.join('\n') : '',
+      questions_text: Array.isArray(task?.questions) ? task.questions.join('\n') : '',
+      image_id_a: String(imageIds[0] || ''),
+      image_id_b: String(imageIds[1] || ''),
+    });
+  };
+
+  const cancelImageTaskEdit = () => {
+    setImageTaskEditId('');
+    setImageTaskDraft(EMPTY_IMAGE_TASK_DRAFT);
   };
 
   return (
@@ -1163,7 +1182,7 @@ export function AdminPage() {
             </div>
 
             <div className="image-task-builder">
-              <h5>Bild-Aufgabentyp hinzufügen</h5>
+              <h5>{editingImageTask ? 'Bild-Aufgabe bearbeiten' : 'Bild-Aufgabentyp hinzufügen'}</h5>
               <div className="admin-grid">
                 <label className="form-field">
                   <span>Typ</span>
@@ -1283,104 +1302,107 @@ export function AdminPage() {
                 />
               )}
 
-              <button
-                type="button"
-                className="primary-btn"
-                onClick={async () => {
-                  try {
-                    if ((items.images || []).length < 1) {
-                      showError('Bitte zuerst mindestens 1 Bild-Datei hochladen.');
-                      return;
-                    }
-                    const nextType = String(imageTaskDraft.type || '');
-                    const title = String(imageTaskDraft.title || '').trim();
-                    if (!title) {
-                      showError('Bitte Titel für die Bild-Aufgabe eingeben.');
-                      return;
-                    }
-                    const orderIndex = imageTaskItems.length;
-                    const task_id = `imgtask_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-                    const base = {
-                      task_id,
-                      type: nextType,
-                      title,
-                      description: String(imageTaskDraft.description || '').trim(),
-                      order_index: orderIndex,
-                    };
-                    const image_ids = [];
-                    if (imageTaskDraft.image_id_a) image_ids.push(imageTaskDraft.image_id_a);
-                    if (nextType === 'image_compare' && imageTaskDraft.image_id_b) image_ids.push(imageTaskDraft.image_id_b);
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={async () => {
+                    try {
+                      if ((items.images || []).length < 1) {
+                        showError('Bitte zuerst mindestens 1 Bild-Datei hochladen.');
+                        return;
+                      }
+                      const nextType = String(imageTaskDraft.type || '');
+                      const title = String(imageTaskDraft.title || '').trim();
+                      if (!title) {
+                        showError('Bitte Titel für die Bild-Aufgabe eingeben.');
+                        return;
+                      }
+                      const editingTaskOrder = editingImageTask
+                        ? Number(editingImageTask.order_index || 0)
+                        : imageTaskItems.length;
+                      const task_id = editingImageTask
+                        ? String(editingImageTask.task_id)
+                        : `imgtask_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                      const base = {
+                        task_id,
+                        type: nextType,
+                        title,
+                        description: String(imageTaskDraft.description || '').trim(),
+                        order_index: editingTaskOrder,
+                      };
+                      const image_ids = [];
+                      if (imageTaskDraft.image_id_a) image_ids.push(imageTaskDraft.image_id_a);
+                      if (nextType === 'image_compare' && imageTaskDraft.image_id_b) image_ids.push(imageTaskDraft.image_id_b);
 
-                    if (nextType === 'image_compare' && image_ids.length < 2) {
-                      showError('Für Bildvergleich bitte zwei Bilder auswählen.');
-                      return;
-                    }
-                    if (nextType !== 'image_compare' && image_ids.length < 1) {
-                      showError('Bitte mindestens ein Bild auswählen.');
-                      return;
-                    }
+                      if (nextType === 'image_compare' && image_ids.length < 2) {
+                        showError('Für Bildvergleich bitte zwei Bilder auswählen.');
+                        return;
+                      }
+                      if (nextType !== 'image_compare' && image_ids.length < 1) {
+                        showError('Bitte mindestens ein Bild auswählen.');
+                        return;
+                      }
 
-                    const nextTask = {
-                      ...base,
-                      image_ids,
-                      duration_sec:
-                        Number.isFinite(Number(imageTaskDraft.duration_sec)) && Number(imageTaskDraft.duration_sec) > 0
-                          ? Math.floor(Number(imageTaskDraft.duration_sec))
-                          : 5,
-                      max_select:
-                        Number.isFinite(Number(imageTaskDraft.max_select)) && Number(imageTaskDraft.max_select) > 0
-                          ? Math.floor(Number(imageTaskDraft.max_select))
-                          : 5,
-                      max_marks:
-                        Number.isFinite(Number(imageTaskDraft.max_marks)) && Number(imageTaskDraft.max_marks) > 0
-                          ? Math.floor(Number(imageTaskDraft.max_marks))
-                          : 3,
-                      cards: (() => {
-                        const typed = String(imageTaskDraft.cards_text || '')
+                      const nextTask = {
+                        ...base,
+                        image_ids,
+                        duration_sec:
+                          Number.isFinite(Number(imageTaskDraft.duration_sec)) && Number(imageTaskDraft.duration_sec) > 0
+                            ? Math.floor(Number(imageTaskDraft.duration_sec))
+                            : 5,
+                        max_select:
+                          Number.isFinite(Number(imageTaskDraft.max_select)) && Number(imageTaskDraft.max_select) > 0
+                            ? Math.floor(Number(imageTaskDraft.max_select))
+                            : 5,
+                        max_marks:
+                          Number.isFinite(Number(imageTaskDraft.max_marks)) && Number(imageTaskDraft.max_marks) > 0
+                            ? Math.floor(Number(imageTaskDraft.max_marks))
+                            : 3,
+                        cards: (() => {
+                          const typed = String(imageTaskDraft.cards_text || '')
+                            .split('\n')
+                            .map((x) => x.trim())
+                            .filter(Boolean);
+                          return typed.length ? typed : imageCardPool;
+                        })(),
+                        questions: String(imageTaskDraft.questions_text || '')
                           .split('\n')
                           .map((x) => x.trim())
-                          .filter(Boolean);
-                        return typed.length ? typed : imageCardPool;
-                      })(),
-                      questions: String(imageTaskDraft.questions_text || '')
-                        .split('\n')
-                        .map((x) => x.trim())
-                        .filter(Boolean),
-                    };
+                          .filter(Boolean),
+                      };
 
-                    if (nextType === 'image_impression' && nextTask.cards.length < 5) {
-                      showError('Für Bild Impression bitte mehrere Cards hinterlegen (empfohlen 25).');
-                      return;
-                    }
-                    if (nextType === 'image_questions' && nextTask.questions.length < 1) {
-                      showError('Bitte mindestens eine Frage hinterlegen.');
-                      return;
-                    }
+                      if (nextType === 'image_impression' && nextTask.cards.length < 5) {
+                        showError('Für Bild Impression bitte mehrere Cards hinterlegen (empfohlen 25).');
+                        return;
+                      }
+                      if (nextType === 'image_questions' && nextTask.questions.length < 1) {
+                        showError('Bitte mindestens eine Frage hinterlegen.');
+                        return;
+                      }
 
-                    await studyApi.update(selectedStudy, {
-                      image_rating_tasks: [...imageTaskItems, nextTask],
-                    });
-                    await refreshStudies();
-                    setImageTaskDraft({
-                      type: 'image_questions',
-                      title: '',
-                      description: '',
-                      duration_sec: '5',
-                      max_select: '5',
-                      max_marks: '3',
-                      cards_text: '',
-                      questions_text: '',
-                      image_id_a: '',
-                      image_id_b: '',
-                    });
-                    showSuccess('Bild-Aufgabe hinzugefügt.');
-                  } catch (err) {
-                    showError(err.message || 'Bild-Aufgabe konnte nicht erstellt werden.');
-                  }
-                }}
-              >
-                Bild-Aufgabe hinzufügen
-              </button>
+                      const nextImageTasks = editingImageTask
+                        ? imageTaskItems.map((taskItem) =>
+                            String(taskItem.task_id) === String(editingImageTask.task_id) ? nextTask : taskItem
+                          )
+                        : [...imageTaskItems, nextTask];
+                      await studyApi.update(selectedStudy, { image_rating_tasks: nextImageTasks });
+                      await refreshStudies();
+                      cancelImageTaskEdit();
+                      showSuccess(editingImageTask ? 'Bild-Aufgabe erfolgreich gespeichert.' : 'Bild-Aufgabe hinzugefügt.');
+                    } catch (err) {
+                      showError(err.message || 'Bild-Aufgabe konnte nicht gespeichert werden.');
+                    }
+                  }}
+                >
+                  {editingImageTask ? 'Bild-Aufgabe speichern' : 'Bild-Aufgabe hinzufügen'}
+                </button>
+                {editingImageTask && (
+                  <button type="button" className="ghost-btn" onClick={cancelImageTaskEdit}>
+                    Bearbeiten abbrechen
+                  </button>
+                )}
+              </div>
 
               <div className="image-task-list">
                 {imageTaskItems.map((task, idx) => (
@@ -1424,134 +1446,7 @@ export function AdminPage() {
                     <button
                       type="button"
                       className="ghost-btn"
-                      onClick={async () => {
-                        try {
-                          const nextTitle = window.prompt('Titel bearbeiten', String(task.title || ''));
-                          if (nextTitle === null) return;
-                          const title = String(nextTitle || '').trim();
-                          if (!title) {
-                            showError('Titel darf nicht leer sein.');
-                            return;
-                          }
-
-                          const nextDescription = window.prompt(
-                            'Beschreibung bearbeiten',
-                            String(task.description || '')
-                          );
-                          if (nextDescription === null) return;
-
-                          const nextTask = {
-                            ...task,
-                            title,
-                            description: String(nextDescription || '').trim(),
-                          };
-
-                          if (String(task.type || '') === 'image_impression') {
-                            const nextDuration = window.prompt(
-                              'Bilddauer in Sekunden',
-                              String(task.duration_sec || 5)
-                            );
-                            if (nextDuration === null) return;
-                            const durationSec = Number(nextDuration);
-                            if (!Number.isFinite(durationSec) || durationSec <= 0) {
-                              showError('Bilddauer muss größer als 0 sein.');
-                              return;
-                            }
-
-                            const nextMaxSelect = window.prompt(
-                              'Anzahl auswählbarer Cards',
-                              String(task.max_select || 5)
-                            );
-                            if (nextMaxSelect === null) return;
-                            const maxSelect = Number(nextMaxSelect);
-                            if (!Number.isFinite(maxSelect) || maxSelect <= 0) {
-                              showError('Card-Auswahl muss größer als 0 sein.');
-                              return;
-                            }
-
-                            const nextCardsRaw = window.prompt(
-                              'Card Pool bearbeiten (mit Komma oder Zeilenumbruch trennen)',
-                              Array.isArray(task.cards) ? task.cards.join(', ') : ''
-                            );
-                            if (nextCardsRaw === null) return;
-                            const cards = String(nextCardsRaw || '')
-                              .split(/\n|,/)
-                              .map((x) => x.trim())
-                              .filter(Boolean);
-                            if (cards.length < 5) {
-                              showError('Für Bild Impression bitte mindestens 5 Cards hinterlegen.');
-                              return;
-                            }
-
-                            nextTask.duration_sec = Math.floor(durationSec);
-                            nextTask.max_select = Math.floor(maxSelect);
-                            nextTask.cards = cards;
-                          }
-
-                          if (String(task.type || '') === 'image_questions') {
-                            const nextQuestionsRaw = window.prompt(
-                              'Fragen bearbeiten (mit Komma oder Zeilenumbruch trennen)',
-                              Array.isArray(task.questions) ? task.questions.join('\n') : ''
-                            );
-                            if (nextQuestionsRaw === null) return;
-                            const questions = String(nextQuestionsRaw || '')
-                              .split(/\n|,/)
-                              .map((x) => x.trim())
-                              .filter(Boolean);
-                            if (questions.length < 1) {
-                              showError('Bitte mindestens eine Frage hinterlegen.');
-                              return;
-                            }
-                            nextTask.questions = questions;
-                          }
-
-                          if (String(task.type || '') === 'image_dislike_mark') {
-                            const nextMaxMarks = window.prompt(
-                              'Maximale Markierungen pro Bild',
-                              String(task.max_marks || 3)
-                            );
-                            if (nextMaxMarks === null) return;
-                            const maxMarks = Number(nextMaxMarks);
-                            if (!Number.isFinite(maxMarks) || maxMarks <= 0) {
-                              showError('Maximale Markierungen müssen größer als 0 sein.');
-                              return;
-                            }
-                            nextTask.max_marks = Math.floor(maxMarks);
-                          }
-
-                          const imageIdsHint = (Array.isArray(task.image_ids) ? task.image_ids : []).join(', ');
-                          const nextImageIdsRaw = window.prompt(
-                            'Bild-IDs bearbeiten (Komma-getrennt, leer = unverändert)',
-                            imageIdsHint
-                          );
-                          if (nextImageIdsRaw === null) return;
-                          const typedImageIds = String(nextImageIdsRaw || '')
-                            .split(',')
-                            .map((x) => x.trim())
-                            .filter(Boolean);
-                          const nextImageIds = typedImageIds.length > 0
-                            ? typedImageIds
-                            : (Array.isArray(task.image_ids) ? task.image_ids : []);
-                          if (String(task.type || '') === 'image_compare' && nextImageIds.length < 2) {
-                            showError('Bildvergleich benötigt mindestens 2 Bild-IDs.');
-                            return;
-                          }
-                          if (String(task.type || '') !== 'image_compare' && nextImageIds.length < 1) {
-                            showError('Bitte mindestens eine Bild-ID hinterlegen.');
-                            return;
-                          }
-                          nextTask.image_ids = nextImageIds;
-
-                          const normalized = imageTaskItems.map((item) =>
-                            String(item.task_id) === String(task.task_id) ? nextTask : item
-                          );
-                          await studyApi.update(selectedStudy, { image_rating_tasks: normalized });
-                          await refreshStudies();
-                          showSuccess('Bild-Aufgabe erfolgreich aktualisiert.');
-                        } catch (err) {
-                          showError(err.message || 'Bild-Aufgabe konnte nicht aktualisiert werden.');
-                        }
-                      }}
+                      onClick={() => startImageTaskEdit(task)}
                     >
                       Bearbeiten
                     </button>
