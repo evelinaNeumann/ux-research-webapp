@@ -1423,6 +1423,140 @@ export function AdminPage() {
                     {!!task.description && <small>{task.description}</small>}
                     <button
                       type="button"
+                      className="ghost-btn"
+                      onClick={async () => {
+                        try {
+                          const nextTitle = window.prompt('Titel bearbeiten', String(task.title || ''));
+                          if (nextTitle === null) return;
+                          const title = String(nextTitle || '').trim();
+                          if (!title) {
+                            showError('Titel darf nicht leer sein.');
+                            return;
+                          }
+
+                          const nextDescription = window.prompt(
+                            'Beschreibung bearbeiten',
+                            String(task.description || '')
+                          );
+                          if (nextDescription === null) return;
+
+                          const nextTask = {
+                            ...task,
+                            title,
+                            description: String(nextDescription || '').trim(),
+                          };
+
+                          if (String(task.type || '') === 'image_impression') {
+                            const nextDuration = window.prompt(
+                              'Bilddauer in Sekunden',
+                              String(task.duration_sec || 5)
+                            );
+                            if (nextDuration === null) return;
+                            const durationSec = Number(nextDuration);
+                            if (!Number.isFinite(durationSec) || durationSec <= 0) {
+                              showError('Bilddauer muss größer als 0 sein.');
+                              return;
+                            }
+
+                            const nextMaxSelect = window.prompt(
+                              'Anzahl auswählbarer Cards',
+                              String(task.max_select || 5)
+                            );
+                            if (nextMaxSelect === null) return;
+                            const maxSelect = Number(nextMaxSelect);
+                            if (!Number.isFinite(maxSelect) || maxSelect <= 0) {
+                              showError('Card-Auswahl muss größer als 0 sein.');
+                              return;
+                            }
+
+                            const nextCardsRaw = window.prompt(
+                              'Card Pool bearbeiten (mit Komma oder Zeilenumbruch trennen)',
+                              Array.isArray(task.cards) ? task.cards.join(', ') : ''
+                            );
+                            if (nextCardsRaw === null) return;
+                            const cards = String(nextCardsRaw || '')
+                              .split(/\n|,/)
+                              .map((x) => x.trim())
+                              .filter(Boolean);
+                            if (cards.length < 5) {
+                              showError('Für Bild Impression bitte mindestens 5 Cards hinterlegen.');
+                              return;
+                            }
+
+                            nextTask.duration_sec = Math.floor(durationSec);
+                            nextTask.max_select = Math.floor(maxSelect);
+                            nextTask.cards = cards;
+                          }
+
+                          if (String(task.type || '') === 'image_questions') {
+                            const nextQuestionsRaw = window.prompt(
+                              'Fragen bearbeiten (mit Komma oder Zeilenumbruch trennen)',
+                              Array.isArray(task.questions) ? task.questions.join('\n') : ''
+                            );
+                            if (nextQuestionsRaw === null) return;
+                            const questions = String(nextQuestionsRaw || '')
+                              .split(/\n|,/)
+                              .map((x) => x.trim())
+                              .filter(Boolean);
+                            if (questions.length < 1) {
+                              showError('Bitte mindestens eine Frage hinterlegen.');
+                              return;
+                            }
+                            nextTask.questions = questions;
+                          }
+
+                          if (String(task.type || '') === 'image_dislike_mark') {
+                            const nextMaxMarks = window.prompt(
+                              'Maximale Markierungen pro Bild',
+                              String(task.max_marks || 3)
+                            );
+                            if (nextMaxMarks === null) return;
+                            const maxMarks = Number(nextMaxMarks);
+                            if (!Number.isFinite(maxMarks) || maxMarks <= 0) {
+                              showError('Maximale Markierungen müssen größer als 0 sein.');
+                              return;
+                            }
+                            nextTask.max_marks = Math.floor(maxMarks);
+                          }
+
+                          const imageIdsHint = (Array.isArray(task.image_ids) ? task.image_ids : []).join(', ');
+                          const nextImageIdsRaw = window.prompt(
+                            'Bild-IDs bearbeiten (Komma-getrennt, leer = unverändert)',
+                            imageIdsHint
+                          );
+                          if (nextImageIdsRaw === null) return;
+                          const typedImageIds = String(nextImageIdsRaw || '')
+                            .split(',')
+                            .map((x) => x.trim())
+                            .filter(Boolean);
+                          const nextImageIds = typedImageIds.length > 0
+                            ? typedImageIds
+                            : (Array.isArray(task.image_ids) ? task.image_ids : []);
+                          if (String(task.type || '') === 'image_compare' && nextImageIds.length < 2) {
+                            showError('Bildvergleich benötigt mindestens 2 Bild-IDs.');
+                            return;
+                          }
+                          if (String(task.type || '') !== 'image_compare' && nextImageIds.length < 1) {
+                            showError('Bitte mindestens eine Bild-ID hinterlegen.');
+                            return;
+                          }
+                          nextTask.image_ids = nextImageIds;
+
+                          const normalized = imageTaskItems.map((item) =>
+                            String(item.task_id) === String(task.task_id) ? nextTask : item
+                          );
+                          await studyApi.update(selectedStudy, { image_rating_tasks: normalized });
+                          await refreshStudies();
+                          showSuccess('Bild-Aufgabe erfolgreich aktualisiert.');
+                        } catch (err) {
+                          showError(err.message || 'Bild-Aufgabe konnte nicht aktualisiert werden.');
+                        }
+                      }}
+                    >
+                      Bearbeiten
+                    </button>
+                    <button
+                      type="button"
                       className="danger-btn"
                       onClick={async () => {
                         const ok = window.confirm('Bild-Aufgabe wirklich löschen?');
