@@ -4,6 +4,7 @@ import { analyticsOverview, flattenExport, resolveStudyScopeIds } from '../servi
 import { toCsv } from '../utils/csv.js';
 import { UserStudyProfile } from '../models/UserStudyProfile.js';
 import { Study } from '../models/Study.js';
+import { Session } from '../models/Session.js';
 import { getCurrentPrivacyPolicy } from '../services/privacy-policy-service.js';
 
 const router = Router();
@@ -809,12 +810,28 @@ function roleLabel(roleCategory, roleCustom) {
 }
 
 async function loadPortraitInsights(studyId, filters = {}) {
-  const study = await Study.findById(studyId, { name: 1 });
+  const study = await Study.findById(studyId, { name: 1, composed_sections: 1 });
   const studyScopeIds = await resolveStudyScopeIds(studyId);
-  const profiles = await UserStudyProfile.find(
-    studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : { study_id: studyId }
-  )
+  const isMixedStudy = Array.isArray(study?.composed_sections) && study.composed_sections.length > 0;
+  const mixedUserIds = isMixedStudy
+    ? await Session.distinct('user_id', { flow_study_id: studyId })
+    : [];
+
+  const profileQuery = studyScopeIds.length > 0 ? { study_id: { $in: studyScopeIds } } : { study_id: studyId };
+  if (isMixedStudy) {
+    profileQuery.user_id = { $in: mixedUserIds };
+  }
+
+  const profilesRaw = await UserStudyProfile.find(profileQuery)
     .sort({ completed_at: -1 });
+  const seenUserIds = new Set();
+  const profiles = [];
+  for (const profile of profilesRaw) {
+    const userId = String(profile.user_id || '');
+    if (!userId || seenUserIds.has(userId)) continue;
+    seenUserIds.add(userId);
+    profiles.push(profile);
+  }
 
   const filteredProfiles = profiles.filter((p) => {
     const ageRange = p.age_range || '';

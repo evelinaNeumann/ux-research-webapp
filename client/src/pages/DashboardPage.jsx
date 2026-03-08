@@ -116,7 +116,11 @@ export function DashboardPage({ user }) {
       const [studiesRes, sessionsRes] = await Promise.all([studyApi.list(), sessionApi.list()]);
       const allStudies = studiesRes.items || [];
       const allowedStudyIds = new Set(allStudies.map((s) => String(s._id)));
-      const allSessions = (sessionsRes.items || []).filter((s) => allowedStudyIds.has(String(s.study_id)));
+      const allSessions = (sessionsRes.items || []).filter((s) => {
+        const studyId = String(s.study_id || '');
+        const flowStudyId = String(s.flow_study_id || '');
+        return allowedStudyIds.has(studyId) || (flowStudyId && allowedStudyIds.has(flowStudyId));
+      });
       const standaloneAllSessions = allSessions.filter((s) => !s.flow_study_id);
       const mixedStudies = allStudies.filter(
         (studyItem) => Array.isArray(studyItem?.composed_sections) && studyItem.composed_sections.length > 0
