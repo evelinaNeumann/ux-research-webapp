@@ -494,18 +494,33 @@ export function SessionPage() {
     setMessage('');
     try {
       if (imageRatingTasks.length > 0) {
-        for (const task of imageRatingTasks) {
-          const taskId = String(task.task_id || '');
-          if (!taskId) continue;
-          if (!isImageTaskAnswered(task) && !imageTaskResponses[taskId]?.timed_out) continue;
-          const response = imageTaskResponses[taskId]?.payload || {};
-          await researchApi.submitImageTaskResponse({
-            session_id: session._id,
-            task_id: taskId,
-            task_type: task.type,
-            payload: response,
-            timed_out: !!imageTaskResponses[taskId]?.timed_out,
-          });
+        const safeImageTaskIndex = Math.min(Math.max(activeImageTaskIndex, 0), imageRatingTasks.length - 1);
+        const task = imageRatingTasks[safeImageTaskIndex];
+        const taskId = String(task?.task_id || '');
+        if (!task || !taskId) {
+          setMessageType('error');
+          setMessage('Aktuelle Bild-Aufgabe konnte nicht ermittelt werden.');
+          return;
+        }
+        if (!isImageTaskAnswered(task) && !imageTaskResponses[taskId]?.timed_out) {
+          setMessageType('error');
+          setMessage('Bitte zuerst die aktuelle Bild-Aufgabe abschließen.');
+          return;
+        }
+        const response = imageTaskResponses[taskId]?.payload || {};
+        await researchApi.submitImageTaskResponse({
+          session_id: session._id,
+          task_id: taskId,
+          task_type: task.type,
+          payload: response,
+          timed_out: !!imageTaskResponses[taskId]?.timed_out,
+        });
+
+        if (safeImageTaskIndex < imageRatingTasks.length - 1) {
+          setActiveImageTaskIndex(safeImageTaskIndex + 1);
+          setMessage('Bild-Aufgabe gespeichert. Nächster Schritt geöffnet.');
+          setMessageType('success');
+          return;
         }
       } else {
         await persistImageRatings();
