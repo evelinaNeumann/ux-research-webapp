@@ -507,14 +507,19 @@ export function SessionPage() {
           setMessage('Bitte zuerst die aktuelle Bild-Aufgabe abschließen.');
           return;
         }
-        const response = imageTaskResponses[taskId]?.payload || {};
-        await researchApi.submitImageTaskResponse({
-          session_id: session._id,
-          task_id: taskId,
-          task_type: task.type,
-          payload: response,
-          timed_out: !!imageTaskResponses[taskId]?.timed_out,
-        });
+        for (const taskItem of imageRatingTasks) {
+          const itemTaskId = String(taskItem.task_id || '');
+          if (!itemTaskId) continue;
+          if (!isImageTaskAnswered(taskItem) && !imageTaskResponses[itemTaskId]?.timed_out) continue;
+          const response = imageTaskResponses[itemTaskId]?.payload || {};
+          await researchApi.submitImageTaskResponse({
+            session_id: session._id,
+            task_id: itemTaskId,
+            task_type: taskItem.type,
+            payload: response,
+            timed_out: !!imageTaskResponses[itemTaskId]?.timed_out,
+          });
+        }
 
         if (safeImageTaskIndex < imageRatingTasks.length - 1) {
           setActiveImageTaskIndex(safeImageTaskIndex + 1);
