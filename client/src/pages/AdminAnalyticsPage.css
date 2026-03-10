@@ -591,6 +591,15 @@
   margin: 0 auto;
 }
 
+.image-compare-chart-card .dist-wrap {
+  margin-top: 0.2rem;
+  gap: 0.45rem;
+}
+
+.image-compare-chart-card .dist-row {
+  grid-template-columns: minmax(70px, 110px) 1fr auto;
+}
+
 .portrait-card,
 .report-diagram-card,
 .qa-block,

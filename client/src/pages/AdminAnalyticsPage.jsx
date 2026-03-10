@@ -307,6 +307,12 @@ export function AdminAnalyticsPage() {
       [String(left?._id || '')]: 'Bild 1',
       [String(right?._id || '')]: 'Bild 2',
     };
+    const compareRows = Array.isArray(task?.option_distribution)
+      ? task.option_distribution.map((row) => ({
+          ...row,
+          label: labelMap[String(row.option || '')] || String(row.option || 'Unbekannt'),
+        }))
+      : [];
     const leftUrl = uploadedAssetUrl(left?.path || '');
     const rightUrl = uploadedAssetUrl(right?.path || '');
     return (
@@ -328,10 +334,10 @@ export function AdminAnalyticsPage() {
           )}
         </section>
         <section className="image-compare-chart-card">
-          <small>Vergleichsdiagramm</small>
-          {renderPieChart(
-            task?.option_distribution || [],
-            (row) => labelMap[String(row.option || '')] || String(row.option || 'Unbekannt'),
+          <small>Balkendiagramm: Auswahlverteilung</small>
+          {renderCountBars(
+            compareRows,
+            (row) => row.label,
             'Keine Vergleichs-Daten vorhanden.'
           )}
         </section>
