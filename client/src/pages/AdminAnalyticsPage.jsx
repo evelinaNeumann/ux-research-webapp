@@ -300,6 +300,44 @@ export function AdminAnalyticsPage() {
       </div>
     );
   };
+  const renderImageComparePreview = (task) => {
+    const options = Array.isArray(task?.compare_options) ? task.compare_options : [];
+    const [left, right] = options;
+    const labelMap = {
+      [String(left?._id || '')]: 'Bild 1',
+      [String(right?._id || '')]: 'Bild 2',
+    };
+    const leftUrl = uploadedAssetUrl(left?.path || '');
+    const rightUrl = uploadedAssetUrl(right?.path || '');
+    return (
+      <div className="image-compare-eval-grid">
+        <section className="image-compare-preview-card">
+          <small>Bild 1 Vorschau</small>
+          {leftUrl ? (
+            <img src={leftUrl} alt={left?.alt_text || 'Bild 1'} />
+          ) : (
+            <p>Keine Vorschau verfügbar.</p>
+          )}
+        </section>
+        <section className="image-compare-preview-card">
+          <small>Bild 2 Vorschau</small>
+          {rightUrl ? (
+            <img src={rightUrl} alt={right?.alt_text || 'Bild 2'} />
+          ) : (
+            <p>Keine Vorschau verfügbar.</p>
+          )}
+        </section>
+        <section className="image-compare-chart-card">
+          <small>Vergleichsdiagramm</small>
+          {renderPieChart(
+            task?.option_distribution || [],
+            (row) => labelMap[String(row.option || '')] || String(row.option || 'Unbekannt'),
+            'Keine Vergleichs-Daten vorhanden.'
+          )}
+        </section>
+      </div>
+    );
+  };
 
   const portraitExportQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -357,7 +395,14 @@ export function AdminAnalyticsPage() {
             .report-preview-content .pie-block { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
             .report-preview-content .pie-legend { order: 1; }
             .report-preview-content .pie-chart { order: 2; width: 92px; height: 92px; margin: 0; }
+            .pie-label { overflow-wrap: anywhere; }
             .report-portrait-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(280px, 350px)); justify-content: start; }
+            .report-image-task-grid { display: grid; gap: 10px; grid-template-columns: 1fr; }
+            .image-compare-eval-grid { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(230px, 1fr); align-items: start; }
+            .image-compare-preview-card, .image-compare-chart-card { border: 1px solid #dbe2ee; border-radius: 10px; background: #fff; padding: 6px; display: grid; gap: 4px; }
+            .image-compare-preview-card img { width: 100%; height: auto; max-height: 230px; object-fit: contain; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; }
+            .image-compare-chart-card .pie-block { grid-template-columns: 1fr; }
+            .image-compare-chart-card .pie-chart { width: 140px; height: 140px; margin: 0 auto; }
             .profile-agg-grid { display: grid; gap: 10px; grid-template-columns: 1fr; }
             .dist-wrap { display: grid; gap: 6px; }
             .dist-row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr auto; align-items: center; gap: 8px; }
@@ -375,7 +420,7 @@ export function AdminAnalyticsPage() {
             .dislike-image-wrap img { display: block; width: 100%; height: auto; }
             .dislike-mark-point { position: absolute; transform: translate(-50%, -50%); color: #dc2626; font-weight: 700; font-size: 14px; line-height: 1; text-shadow: 0 0 2px #fff; }
             .portrait-card, .report-diagram-card, .qa-block, .report-step-card, .report-task-block, .list-row { break-inside: avoid-page; page-break-inside: avoid; }
-            @media (max-width: 900px) { .report-preview-page { width: 100%; height: auto; min-height: 100vh; padding: 16px; } .report-diagram-grid, .report-portrait-grid, .profile-agg-grid { grid-template-columns: 1fr; } }
+            @media (max-width: 900px) { .report-preview-page { width: 100%; height: auto; min-height: 100vh; padding: 16px; } .report-diagram-grid, .report-portrait-grid, .profile-agg-grid, .image-compare-eval-grid { grid-template-columns: 1fr; } }
             @media print { @page { size: A4; margin: 10mm; } body { background: #fff; margin: 0; } .print-toolbar { display: none; } .report-preview-page { width: auto; height: auto; min-height: auto; margin: 0; box-shadow: none; padding: 0; overflow: visible; } .report-preview-content { overflow: visible; } .portrait-card, .report-diagram-card, .qa-block, .report-step-card, .report-task-block, .list-row { break-inside: avoid-page; page-break-inside: avoid; } }
           </style>
         </head>
@@ -783,8 +828,7 @@ export function AdminAnalyticsPage() {
                         {(overview.image_task_work?.tasks || []).map((task) => (
                           <section key={`report-image-task-${task.task_id}`} className="qa-block qa-nested">
                             <p className="qa-question">{task.title || task.task_id} ({task.type})</p>
-                            {task.type === 'image_compare' &&
-                              renderPieChart(task.option_distribution || [], (row) => row.option, 'Keine Vergleichs-Daten vorhanden.')}
+                            {task.type === 'image_compare' && renderImageComparePreview(task)}
                             {task.type === 'image_impression' &&
                               renderPieChart((task.card_distribution || []).slice(0, 8), (row) => row.card, 'Keine Card-Auswahl-Daten vorhanden.')}
                             {task.type === 'image_dislike_mark' && renderDislikeMarkPreview(task)}
@@ -1089,9 +1133,7 @@ export function AdminAnalyticsPage() {
                           <article key={task.task_id} className="qa-block qa-nested">
                             <p className="qa-question">{task.title || task.task_id} ({task.type})</p>
                             <small>Antworten: {task.total ?? 0} • Zeit abgelaufen: {task.timed_out ?? 0}</small>
-                            {task.type === 'image_compare' && (
-                              renderPieChart(task.option_distribution || [], (row) => row.option, 'Keine Vergleichs-Daten vorhanden.')
-                            )}
+                            {task.type === 'image_compare' && renderImageComparePreview(task)}
                             {task.type === 'image_impression' && (
                               renderPieChart((task.card_distribution || []).slice(0, 8), (row) => row.card, 'Keine Card-Auswahl-Daten vorhanden.')
                             )}

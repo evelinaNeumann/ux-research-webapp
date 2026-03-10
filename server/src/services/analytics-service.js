@@ -394,12 +394,26 @@ export async function analyticsOverview(filters = {}) {
         if (!selected) continue;
         optionCount[selected] = (optionCount[selected] || 0) + 1;
       }
+      const compareOptions = (Array.isArray(taskDef.image_ids) ? taskDef.image_ids : [])
+        .map((imageId) => {
+          const normalizedId = String(imageId || '').trim();
+          if (!normalizedId) return null;
+          const imageRef = imageAssetById.get(normalizedId);
+          if (!imageRef) return { _id: normalizedId, path: '', alt_text: '' };
+          return {
+            _id: String(imageRef._id),
+            path: String(imageRef.path || ''),
+            alt_text: String(imageRef.alt_text || ''),
+          };
+        })
+        .filter(Boolean);
       return {
         task_id: taskId,
         type: taskType,
         title: taskDef.title || taskId,
         total,
         timed_out: timedOut,
+        compare_options: compareOptions,
         option_distribution: toSortedRows(optionCount, 'option'),
       };
     }

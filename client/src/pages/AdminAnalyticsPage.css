@@ -177,6 +177,7 @@
 .pie-label {
   color: #334155;
   font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 
 .pie-value {
@@ -451,7 +452,7 @@
 .report-image-task-grid {
   display: grid;
   gap: 0.7rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .report-task-block > small:first-child {
@@ -548,6 +549,48 @@
   text-shadow: 0 0 2px #fff;
 }
 
+.image-compare-eval-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(230px, 1fr);
+  align-items: start;
+}
+
+.image-compare-preview-card,
+.image-compare-chart-card {
+  border: 1px solid #dbe2ee;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.5rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.image-compare-preview-card small,
+.image-compare-chart-card small {
+  color: #475569;
+}
+
+.image-compare-preview-card img {
+  width: 100%;
+  height: auto;
+  max-height: 230px;
+  object-fit: contain;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.image-compare-chart-card .pie-block {
+  grid-template-columns: 1fr;
+}
+
+.image-compare-chart-card .pie-chart {
+  width: min(150px, 100%);
+  height: min(150px, 100%);
+  margin: 0 auto;
+}
+
 .portrait-card,
 .report-diagram-card,
 .qa-block,
@@ -572,6 +615,10 @@
   }
 
   .report-image-task-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .image-compare-eval-grid {
     grid-template-columns: 1fr;
   }
 
